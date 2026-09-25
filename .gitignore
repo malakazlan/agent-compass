@@ -1,0 +1,34 @@
+# internal / local only
+.claude/
+CLAUDE.md
+docs/superpowers/
+*.local.*
+.env
+.env.*
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# data, runs, weights (never in git)
+data/
+runs/
+checkpoints/
+*.safetensors
+*.bin
+*.pt
+*.arrow
+*.parquet
+wandb/
+
+# scratch
+.scratch/
+
+# local research material (forks, papers, notes) - never pushed
+research/
+.scratch/
