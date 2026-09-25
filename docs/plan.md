@@ -112,7 +112,8 @@ released no code, weights or data.
 4. **Regenerating Fail-Fast-style data** (multi-seed mini-swe-agent runs on SWE-bench Verified with
    an open policy on the pod) costs GPU hours but gives the only clean apples-to-apples comparison.
    Do it in M5 or skip?
-5. **Public repo licence:** Apache-2.0 is required for the code we take from kev. Confirm for the
+5. **Secondary-domain licences:** the tau-bench trajectory sets from AgentSuite carry no stated licence; the Apache-2.0 alternatives are smaller. Same question as CoderForge.
+6. **Public repo licence:** Apache-2.0 is required for the code we take from kev. Confirm for the
    whole repo.
 
 ## 6. First 10 tasks
@@ -152,5 +153,5 @@ released no code, weights or data.
 | M3 | v0 model | `p_success` 2B beats every baseline at all prefix points; calibration report |
 | M4 | Multi-head and ablations | ablation table: thoughts, budget 4k/8k/16k, policy token, pairwise loss, backbone 1.7B/2B/4B, LoRA vs full, single vs multi-head; chosen default |
 | M5 | Online proof | best-of-N and early-abort on a SWE-bench Verified subset, resolve-rate lift or token savings with CIs across seeds |
-| M6 | Second domain | pipeline on a non-SWE domain from `data_audit_secondary.md`; transfer results |
+| M6 | Second domain | tool-use agents on tau-bench / tau2-bench (about 13k trajectories, 30 policies, programmatic 0/1 score, 30 runs per task); terminal-bench trajectories (52k trials, Apache-2.0) as held-out-domain eval; web agents via `McGill-NLP/agent-reward-bench` (1.3k trajectories with a human looping label) for `stuck` eval only. Math PRM data at most a 10% mixture in one ablation. Details in `docs/data_audit_secondary.md` |
 | M7 | Release | AgentCompass-Bench, weights for both tiers, SDK, server, model cards, report |
