@@ -17,7 +17,13 @@ build/
 
 # data, runs, weights (never in git)
 /data/
-/runs/
+# runs: keep configs and results, never weights or row dumps
+/runs/**/checkpoint*/
+/runs/**/*.safetensors
+/runs/**/*.pt
+/runs/**/*.bin
+/runs/**/rows*.json*
+/runs/smoke*/
 /checkpoints/
 *.safetensors
 *.bin
