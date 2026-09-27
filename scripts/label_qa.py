@@ -66,7 +66,8 @@ def main() -> None:
                     prog_rules[pr][rule.split(" ", 2)[0] + " " + rule.split(" ", 2)[1] if " " in rule else rule] += 1
                 if m.get("best_next"):
                     tiers[m["best_next"]["tier"]] += 1
-                bucket = f"{int(m['prefix_frac'] * 4) * 25}-{int(m['prefix_frac'] * 4) * 25 + 25}%"
+                b = min(3, int(m["prefix_frac"] * 4))
+                bucket = f"{b * 25}-{b * 25 + 25}%"
                 frac_hist[bucket] += 1
                 p_by_frac[bucket][str(q["p_success"]["label"])] += 1
                 if "escalate" in q:

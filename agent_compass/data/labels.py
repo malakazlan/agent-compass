@@ -53,14 +53,23 @@ def normalize_action(action: str) -> str:
     return _WS.sub(" ", action.strip())
 
 
+_EDIT_RANGE = re.compile(r"^edit (\d+):(\d+)")
+
+
 def action_family(action: str) -> str:
-    """Command word plus paths, numbers removed: `edit 141:143 ...` and `edit 140:142 ...` share a family."""
+    """Command word plus paths (numbers removed) plus, for SWE-agent `edit A:B`, the line
+    range bucketed to tens: `edit 141:143` and `edit 140:142` share a family, `edit 20:22`
+    does not."""
     a = normalize_action(action)
     head = a.split(" ", 1)[0]
     if head == "str_replace_editor" and " " in a:
         head = " ".join(a.split(" ", 2)[:2])
+    loc = ""
+    m = _EDIT_RANGE.match(a)
+    if m:
+        loc = f"L{int(m.group(1)) // 10}"
     paths = " ".join(sorted(set(_PATH.findall(a))))
-    return _NUM.sub("#", f"{head} {paths}".strip())
+    return (_NUM.sub("#", f"{head} {paths}".strip()) + (f" {loc}" if loc else "")).strip()
 
 
 def parse_test_counts(observation: str) -> tuple[int | None, int | None]:
@@ -143,7 +152,13 @@ def stuck_label(steps: list[Step], cfg: RuleConfig = RuleConfig()) -> RuleResult
         top_e, n_e = errs.most_common(1)[0]
         if n_e >= cfg.repeat:
             reasons.append(f"same error x{n_e}: {top_e[:60]}")
-    edits = Counter(action_family(s.action) for s in win if _EDIT.match(normalize_action(s.action)))
+    # Edit cycle: repeated edits at the same location that did not go through. Three
+    # successful edits in different places is ordinary work, not being stuck.
+    edits = Counter(
+        action_family(s.action)
+        for s in win
+        if _EDIT.match(normalize_action(s.action)) and (_EDIT_BAD.search(s.observation) or error_signature(s.observation))
+    )
     if edits:
         top_f, n_f = edits.most_common(1)[0]
         if n_f >= cfg.repeat:
