@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-compass"
+version = "0.0.1"
+description = "Calibrated value model for AI agents: success, progress, stuck, best next action, escalation, steps left in one forward pass"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Azlan Malik" }]
+requires-python = ">=3.12,<3.14"
+keywords = ["agents", "value-model", "calibration", "process-reward-model", "swe-bench"]
+dependencies = [
+    "pydantic>=2.9",
+    "numpy>=2.0",
+]
+
+[project.urls]
+Repository = "https://github.com/malakazlan/agent-compass"
+
+[project.optional-dependencies]
+data = [
+    "datasets>=3.0",
+    "huggingface_hub>=0.30",
+    "pyarrow>=17",
+]
+train = [
+    "torch>=2.6,<2.9",
+    "transformers>=5.17,<6",
+    "peft>=0.21",
+    "accelerate>=1.15.0",
+    "scikit-learn>=1.5",
+]
+serve = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.setuptools]
+packages = ["agent_compass", "agent_compass.data", "agent_compass.data.convert"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
