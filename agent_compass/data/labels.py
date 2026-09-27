@@ -18,9 +18,13 @@ progress    for the last step of the prefix, 0 regressed / 1 no change / 2 small
             0  a test run with more failures than before, an edit that errored, or an
                action that produced the same error as the previous step
             1  otherwise (repeated action, reading the same file again, no new signal)
-escalate    True if the run fails and the task baseline is <= `escalate_baseline`
-            (the policy class rarely solves this task; hand off early). Masked when the
-            task has fewer than `min_runs` runs, because then the baseline is just the outcome.
+escalate    True if the run fails AND the task is clearly hard for this policy class: the
+            leave-one-out task baseline (pass rate of the OTHER runs of the task) is at most
+            `escalate_ratio` times the policy's overall success rate. A task the policy
+            usually solves is not an escalation case even when this run fails; a task it
+            almost never solves is. Masked when the task has fewer than `min_runs` other runs.
+            Baselines everywhere are leave-one-out so a run's own outcome never leaks into
+            its baseline or advantage.
 best_next   built in `candidates.py` from other runs of the same task.
 """
 
@@ -107,6 +111,11 @@ class TaskStats:
     def baseline(self) -> float:
         return self.n_success / self.n_runs if self.n_runs else 0.0
 
+    def loo_baseline(self, outcome: bool) -> float | None:
+        """Pass rate of the other runs of the task (this run's outcome removed)."""
+        n = self.n_runs - 1
+        return (self.n_success - int(outcome)) / n if n > 0 else None
+
 
 def task_stats(trajs: Iterable[Trajectory]) -> dict[str, TaskStats]:
     n: Counter[str] = Counter()
@@ -130,8 +139,8 @@ def steps_left_bin(remaining: int) -> int:
 class RuleConfig:
     window: int = 6
     repeat: int = 3
-    escalate_baseline: float = 0.25
-    min_runs: int = 3
+    escalate_ratio: float = 0.5  # task baseline <= ratio * policy success rate -> hard task
+    min_runs: int = 3  # other runs of the task needed before baseline-derived labels exist
 
 
 @dataclass(frozen=True)
@@ -222,10 +231,14 @@ def progress_label(steps: list[Step]) -> RuleResult:
     return RuleResult(1, ("no signal",))
 
 
-def escalate_label(outcome: bool, stats: TaskStats | None, cfg: RuleConfig = RuleConfig()) -> bool | None:
-    if stats is None or stats.n_runs < cfg.min_runs:
+def escalate_label(outcome: bool, stats: TaskStats | None, policy_rate: float | None, cfg: RuleConfig = RuleConfig()) -> bool | None:
+    """See module docstring. `policy_rate` = overall success rate of this policy model on the dataset."""
+    if stats is None or policy_rate is None or stats.n_runs - 1 < cfg.min_runs:
         return None
-    return (not outcome) and stats.baseline <= cfg.escalate_baseline
+    loo = stats.loo_baseline(outcome)
+    if loo is None:
+        return None
+    return (not outcome) and loo <= cfg.escalate_ratio * policy_rate
 
 
 # --------------------------------------------------------------------------- all together
@@ -256,14 +269,20 @@ class PrefixLabels:
         }
 
 
-def label_prefix(traj: Trajectory, prefix_len: int, stats: TaskStats | None, cfg: RuleConfig = RuleConfig()) -> PrefixLabels:
+def label_prefix(
+    traj: Trajectory,
+    prefix_len: int,
+    stats: TaskStats | None,
+    cfg: RuleConfig = RuleConfig(),
+    policy_rate: float | None = None,
+) -> PrefixLabels:
     if not 1 <= prefix_len <= len(traj.steps):
         raise ValueError(f"prefix_len must be in [1, {len(traj.steps)}], got {prefix_len}")
     steps = traj.steps[:prefix_len]
     remaining = len(traj.steps) - prefix_len
     st = stuck_label(steps, cfg)
     pr = progress_label(steps)
-    baseline = stats.baseline if stats and stats.n_runs >= cfg.min_runs else None
+    baseline = stats.loo_baseline(traj.outcome) if stats and stats.n_runs - 1 >= cfg.min_runs else None
     return PrefixLabels(
         p_success=traj.outcome,
         baseline=baseline,
@@ -273,7 +292,7 @@ def label_prefix(traj: Trajectory, prefix_len: int, stats: TaskStats | None, cfg
         stuck_reasons=st.reasons,
         progress=int(pr.value),
         progress_reasons=pr.reasons,
-        escalate=escalate_label(traj.outcome, stats, cfg),
+        escalate=escalate_label(traj.outcome, stats, policy_rate, cfg),
     )
 
 

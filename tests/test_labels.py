@@ -102,23 +102,31 @@ def test_task_stats_and_escalate():
     runs = [T([S("ls")], outcome=o, task_id="x__y-1") for o in (True, False, False, False)]
     st = task_stats(runs)["x__y-1"]
     assert (st.n_runs, st.n_success, st.baseline) == (4, 1, 0.25)
-    assert escalate_label(False, st) is True
-    assert escalate_label(True, st) is False
-    assert escalate_label(False, TaskStats(2, 0)) is None  # too few runs
-    assert escalate_label(False, TaskStats(4, 2)) is False  # baseline 0.5 > 0.25
+    assert st.loo_baseline(True) == 0.0 and st.loo_baseline(False) == 1 / 3
+    # policy solves 50% overall; this task's other runs pass 1/3 -> not clearly hard -> no escalation
+    assert escalate_label(False, st, policy_rate=0.5) is False
+    # policy solves 90% overall; 1/3 <= 0.45 -> hard task, failed run -> escalate
+    assert escalate_label(False, st, policy_rate=0.9) is True
+    assert escalate_label(True, st, policy_rate=0.9) is False  # successful run never escalates
+    assert escalate_label(False, TaskStats(3, 0), policy_rate=0.5) is None  # only 2 other runs
+    assert escalate_label(False, TaskStats(22, 1), policy_rate=0.17) is True  # 1/21 <= 0.085
+    assert escalate_label(False, TaskStats(22, 3), policy_rate=0.17) is False  # 3/21 > 0.085
+    assert escalate_label(False, st, policy_rate=None) is None
 
 
 def test_label_prefix_end_to_end():
     steps = [S("ls", "a"), S("open a.py", "[File: a.py]"), S("pytest", "1 passed, 2 failed"), S("edit 1:1\nx\nend_of_edit", "File updated"),
              S("pytest", "3 passed"), S("submit")]
     t = T(steps, outcome=True)
-    st = TaskStats(n_runs=5, n_success=1)
-    L = label_prefix(t, 5, st)
-    assert L.p_success is True and L.baseline == 0.2 and L.advantage == 0.8
+    st = TaskStats(n_runs=5, n_success=1)  # this run is the one success; other 4 all failed
+    L = label_prefix(t, 5, st, policy_rate=0.4)
+    assert L.p_success is True and L.baseline == 0.0 and L.advantage == 1.0  # leave-one-out
     assert L.steps_left == 0  # 1 remaining step -> bin 0
     assert L.progress == 3 and L.stuck is False and L.escalate is False
-    Lf = label_prefix(T(steps, outcome=False), 2, st)
-    assert Lf.steps_left is None and Lf.escalate is True and Lf.advantage == -0.2
-    assert label_prefix(t, 3, None).baseline is None
+    Lf = label_prefix(T(steps, outcome=False), 2, st, policy_rate=0.4)
+    assert Lf.steps_left is None and Lf.baseline == 0.25 and Lf.advantage == -0.25
+    assert Lf.escalate is False  # 0.25 > 0.5 * 0.4
+    assert label_prefix(T(steps, outcome=False), 2, st, policy_rate=0.9).escalate is True
+    assert label_prefix(t, 3, None).baseline is None and label_prefix(t, 3, st).escalate is None
     d = L.as_dict()
     assert set(d) >= {"p_success", "steps_left", "stuck", "progress", "escalate", "baseline", "advantage"}

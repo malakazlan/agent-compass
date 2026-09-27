@@ -81,6 +81,7 @@ def build_records(
     count: Tokenizer | None = None,
     prefix_lens: list[int] | None = None,
     index: TaskIndex | None = None,
+    policy_rate: float | None = None,
 ) -> Iterator[dict]:
     count = count or chars_per_token_counter()
     if index is None and len(runs) > 1:
@@ -99,7 +100,7 @@ def build_records(
         if state_cfg.policy and rng.random() < cfg.policy_dropout:
             policy = state_cfg.policy_unknown_token
         state, state_tokens = build_state_with_count(view, L, state_cfg, count, policy_override=policy)
-        labels = label_prefix(traj, L, stats, cfg.rules)
+        labels = label_prefix(traj, L, stats, cfg.rules, policy_rate=policy_rate)
 
         qs: dict[str, dict] = {}
         qs["p_success"] = {**QUESTIONS["p_success"], "label": labels.p_success}

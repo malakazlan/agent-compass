@@ -19,7 +19,7 @@ STATS = TaskStats(n_runs=4, n_success=1)
 
 
 def test_records_have_kev_shape_and_masking():
-    recs = list(build_records(B, [A, B], STATS, BuildConfig(policy_dropout=0.0)))
+    recs = list(build_records(B, [A, B], STATS, BuildConfig(policy_dropout=0.0), policy_rate=0.9))
     assert recs and all(set(r) == {"state", "questions", "_meta"} for r in recs)
     r = recs[0]
     assert r["state"].startswith("<task>\nFix it\n</task>\n<policy>llama-70b</policy>")
@@ -27,9 +27,10 @@ def test_records_have_kev_shape_and_masking():
     q = r["questions"]
     assert q["p_success"]["type"] == "noul" and q["p_success"]["label"] is False
     assert "steps_left" not in q  # failed run -> masked
-    assert q["escalate"]["label"] is True  # baseline 0.25, failed
+    assert q["escalate"]["label"] is True  # other runs pass 1/3 <= 0.5 * 0.9, and this run failed
     assert q["progress"]["type"] == "score" and len(q["progress"]["criteria"]) == 4 and 0 <= q["progress"]["label"] <= 3
-    assert r["_meta"]["group_id"] == "o__r-1" and r["_meta"]["advantage"] == -0.25
+    assert r["_meta"]["group_id"] == "o__r-1" and abs(r["_meta"]["advantage"] + 1 / 3) < 1e-9  # leave-one-out baseline
+    assert "escalate" not in list(build_records(B, [A, B], STATS, BuildConfig()))[0]["questions"]  # no policy rate -> masked
     json.dumps(recs)  # serialisable
 
 

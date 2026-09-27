@@ -36,6 +36,8 @@ def index_file(path: Path) -> tuple[dict[str, list[int]], dict[str, TaskStats], 
     offsets: dict[str, list[int]] = defaultdict(list)
     n: Counter[str] = Counter()
     s: Counter[str] = Counter()
+    pn: Counter[str] = Counter()
+    ps: Counter[str] = Counter()
     splits: dict[str, str] = {}
     with path.open("rb") as f:
         pos = f.tell()
@@ -45,15 +47,18 @@ def index_file(path: Path) -> tuple[dict[str, list[int]], dict[str, TaskStats], 
                 offsets[head["task_id"]].append(pos)
                 n[head["task_id"]] += 1
                 s[head["task_id"]] += int(head["outcome"])
+                pn[head["policy_model"]] += 1
+                ps[head["policy_model"]] += int(head["outcome"])
                 splits[head["traj_id"]] = head["meta"].get("split")
             pos = f.tell()
-    return dict(offsets), {k: TaskStats(n[k], s[k]) for k in n}, splits
+    policy_rates = {k: ps[k] / pn[k] for k in pn}
+    return dict(offsets), {k: TaskStats(n[k], s[k]) for k in n}, splits, policy_rates
 
 
 _W: dict = {}
 
 
-def _init(inp: str, tokenizer: str | None, cfg_kwargs: dict, wanted: set[str], keep_ids: set[str]) -> None:
+def _init(inp: str, tokenizer: str | None, cfg_kwargs: dict, wanted: set[str], keep_ids: set[str], policy_rates: dict[str, float]) -> None:
     # Shared, read-only state lives in the worker once. Putting `keep_ids` (tens of thousands
     # of ids) into every job tuple pickled a copy per task and exhausted RAM.
     _W["f"] = open(inp, "rb")
@@ -61,6 +66,7 @@ def _init(inp: str, tokenizer: str | None, cfg_kwargs: dict, wanted: set[str], k
     _W["cfg"] = BuildConfig(state=StateConfig(**cfg_kwargs.pop("state")), **cfg_kwargs)
     _W["wanted"] = wanted
     _W["keep_ids"] = keep_ids
+    _W["policy_rates"] = policy_rates
 
 
 def _work(job: tuple[str, list[int], TaskStats | None]) -> tuple[list[tuple[str, str]], dict]:
@@ -79,7 +85,7 @@ def _work(job: tuple[str, list[int], TaskStats | None]) -> tuple[list[tuple[str,
         if split not in wanted or (keep_ids and traj.traj_id not in keep_ids):
             continue
         meta["trajectories"] += 1
-        for rec in build_records(traj, runs, stats, _W["cfg"], _W["count"], index=index):
+        for rec in build_records(traj, runs, stats, _W["cfg"], _W["count"], index=index, policy_rate=_W["policy_rates"].get(traj.policy_model)):
             out.append((split, json.dumps(rec, ensure_ascii=False)))
             meta["records"][split] += 1
             meta["tokens"].append(rec["_meta"]["state_tokens"])
@@ -110,7 +116,8 @@ def main() -> None:
 
     wanted = set(args.splits.split(","))
     t0 = time.time()
-    offsets, stats, splits = index_file(args.inp)
+    offsets, stats, splits, policy_rates = index_file(args.inp)
+    print("policy success rates:", {k: round(v, 3) for k, v in policy_rates.items()}, flush=True)
     print(f"indexed {len(splits)} trajectories over {len(offsets)} tasks in {time.time() - t0:.1f}s", flush=True)
 
     keep_ids: set[str] = set()
@@ -155,7 +162,7 @@ def main() -> None:
             el = time.time() - t1
             print(f"  {done}/{len(jobs)} tasks, {agg['trajectories']} trajectories, {sum(agg['records'].values())} records, {el:.0f}s, eta {el / done * (len(jobs) - done):.0f}s", flush=True)
 
-    init_args = (str(args.inp), str(args.tokenizer) if args.tokenizer else None, cfg_kwargs, wanted, keep_ids)
+    init_args = (str(args.inp), str(args.tokenizer) if args.tokenizer else None, cfg_kwargs, wanted, keep_ids, policy_rates)
     if args.workers > 1:
         with Pool(args.workers, initializer=_init, initargs=init_args) as pool:
             for result in pool.imap_unordered(_work, jobs, chunksize=4):

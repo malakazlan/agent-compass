@@ -31,6 +31,8 @@ def index_unified(path: Path) -> tuple[dict[str, int], dict[str, TaskStats]]:
     offsets: dict[str, int] = {}
     n: Counter[str] = Counter()
     s: Counter[str] = Counter()
+    pn: Counter[str] = Counter()
+    ps: Counter[str] = Counter()
     with path.open("rb") as f:
         pos = f.tell()
         for line in f:
@@ -39,8 +41,10 @@ def index_unified(path: Path) -> tuple[dict[str, int], dict[str, TaskStats]]:
                 offsets[head["traj_id"]] = pos
                 n[head["task_id"]] += 1
                 s[head["task_id"]] += int(head["outcome"])
+                pn[head["policy_model"]] += 1
+                ps[head["policy_model"]] += int(head["outcome"])
             pos = f.tell()
-    return offsets, {k: TaskStats(n[k], s[k]) for k in n}
+    return offsets, {k: TaskStats(n[k], s[k]) for k in n}, {k: ps[k] / pn[k] for k in pn}
 
 
 def main() -> None:
@@ -49,8 +53,9 @@ def main() -> None:
     ap.add_argument("--examples", type=Path, required=True, nargs="+")
     args = ap.parse_args()
     t0 = time.time()
-    offsets, stats = index_unified(args.unified)
-    print(f"indexed {len(offsets)} trajectories in {time.time() - t0:.0f}s", flush=True)
+    offsets, stats, policy_rates = index_unified(args.unified)
+    rates = {k: round(v, 3) for k, v in policy_rates.items()}
+    print(f"indexed {len(offsets)} trajectories in {time.time() - t0:.0f}s; policy success rates {rates}", flush=True)
 
     with args.unified.open("rb") as uf:
         cache: dict[str, Trajectory] = {}
@@ -70,7 +75,7 @@ def main() -> None:
                         uf.seek(offsets[tid])
                         traj = Trajectory.from_json(uf.readline().decode("utf-8"))
                         cache[tid] = traj
-                    L = label_prefix(traj, m["prefix_len"], stats.get(traj.task_id))
+                    L = label_prefix(traj, m["prefix_len"], stats.get(traj.task_id), policy_rate=policy_rates.get(traj.policy_model))
                     q = rec["questions"]
                     old = {k: q[k]["label"] for k in ("stuck", "progress", "escalate", "steps_left") if k in q}
                     q["stuck"] = {**QUESTIONS["stuck"], "label": L.stuck}
