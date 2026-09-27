@@ -24,6 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+from agent_compass.data.candidates import TaskIndex  # noqa: E402
 from agent_compass.data.examples import BuildConfig, build_records  # noqa: E402
 from agent_compass.data.labels import TaskStats  # noqa: E402
 from agent_compass.data.schema import Trajectory  # noqa: E402
@@ -67,12 +68,13 @@ def _work(job: tuple[str, list[int], TaskStats | None, set[str], set[str]]) -> t
         runs.append(Trajectory.from_json(f.readline().decode("utf-8")))
     out: list[tuple[str, str]] = []
     meta = {"trajectories": 0, "records": Counter(), "questions": Counter(), "labels": defaultdict(Counter), "tiers": Counter(), "tokens": []}
+    index = TaskIndex(runs) if len(runs) > 1 else None  # action families derived once per task
     for traj in runs:
         split = traj.meta.get("split")
         if split not in wanted or (keep_ids and traj.traj_id not in keep_ids):
             continue
         meta["trajectories"] += 1
-        for rec in build_records(traj, runs, stats, _W["cfg"], _W["count"]):
+        for rec in build_records(traj, runs, stats, _W["cfg"], _W["count"], index=index):
             out.append((split, json.dumps(rec, ensure_ascii=False)))
             meta["records"][split] += 1
             meta["tokens"].append(rec["_meta"]["state_tokens"])

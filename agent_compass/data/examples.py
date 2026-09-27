@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
-from agent_compass.data.candidates import build_candidate_set
+from agent_compass.data.candidates import TaskIndex, build_candidate_set
 from agent_compass.data.labels import RuleConfig, TaskStats, label_prefix
 from agent_compass.data.prefixes import prefix_fraction, sample_prefix_lengths
 from agent_compass.data.schema import Step, Trajectory
@@ -80,8 +80,11 @@ def build_records(
     cfg: BuildConfig = BuildConfig(),
     count: Tokenizer | None = None,
     prefix_lens: list[int] | None = None,
+    index: TaskIndex | None = None,
 ) -> Iterator[dict]:
     count = count or chars_per_token_counter()
+    if index is None and len(runs) > 1:
+        index = TaskIndex(runs if any(r.traj_id == traj.traj_id for r in runs) else runs + [traj])
     rng = random.Random(f"{cfg.seed}:{traj.traj_id}")
     state_cfg = cfg.state
     if cfg.variant in ("thoughts", "fake_confidence") and not state_cfg.thoughts:
@@ -107,7 +110,7 @@ def build_records(
         if labels.steps_left is not None:
             qs["steps_left"] = {**QUESTIONS["steps_left"], "label": labels.steps_left}
 
-        cand = build_candidate_set(traj, L, runs, k=cfg.k_candidates, rng=rng) if len(runs) > 1 else None
+        cand = build_candidate_set(traj, L, runs, k=cfg.k_candidates, rng=rng, index=index) if len(runs) > 1 else None
         cand_meta = None
         if cand is not None:
             criteria = {f"option_{i + 1}": c.action[: cfg.candidate_max_chars] for i, c in enumerate(cand.options)}
