@@ -16,9 +16,9 @@ build/
 *.egg-info/
 
 # data, runs, weights (never in git)
-data/
-runs/
-checkpoints/
+/data/
+/runs/
+/checkpoints/
 *.safetensors
 *.bin
 *.pt
