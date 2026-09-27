@@ -19,6 +19,10 @@ from typing import Any
 
 from agent_compass.data.schema import Step, Trajectory, repo_key
 
+
+class EmptyTrajectory(ValueError):
+    """The agent never acted (only system + task messages). Nothing to learn from; skipped."""
+
 SOURCE = "nebius/SWE-agent-trajectories"
 SCAFFOLD = "swe-agent"
 TRAJ_PREFIX = "nebius-swe-agent"
@@ -49,6 +53,8 @@ def split_thought_command(ai_text: str) -> tuple[str | None, str, int]:
 
 def convert_row(row: dict[str, Any], *, row_index: int, source: str = SOURCE, shard: str = "") -> Trajectory:
     msgs = row["trajectory"]
+    if len(msgs) >= 2 and msgs[0]["role"] == "system" and msgs[1]["role"] == "user" and len(msgs) < 3:
+        raise EmptyTrajectory(f"{row.get('instance_id')}: no agent steps")
     if len(msgs) < 3 or msgs[0]["role"] != "system" or msgs[1]["role"] != "user":
         raise ValueError(f"{row.get('instance_id')}: unexpected message prefix {[m['role'] for m in msgs[:3]]}")
     task = extract_issue(msgs[1]["text"] or "")
@@ -95,8 +101,9 @@ def convert_row(row: dict[str, Any], *, row_index: int, source: str = SOURCE, sh
     )
 
 
-def convert_parquet(path: str | Path, *, source: str = SOURCE) -> Iterator[Trajectory]:
-    """Stream one parquet shard row-group by row-group; `eval_logs` is never read."""
+def convert_parquet(path: str | Path, *, source: str = SOURCE, skipped: dict[str, int] | None = None) -> Iterator[Trajectory]:
+    """Stream one parquet shard row-group by row-group; `eval_logs` is never read.
+    Rows without agent steps are skipped and counted in `skipped["empty"]`."""
     import pyarrow.parquet as pq
 
     path = Path(path)
@@ -107,5 +114,9 @@ def convert_parquet(path: str | Path, *, source: str = SOURCE) -> Iterator[Traje
     for rg in range(pf.num_row_groups):
         table = pf.read_row_group(rg, columns=cols)
         for j, row in enumerate(table.to_pylist()):
-            yield convert_row(row, row_index=base + j, source=source, shard=shard)
+            try:
+                yield convert_row(row, row_index=base + j, source=source, shard=shard)
+            except EmptyTrajectory:
+                if skipped is not None:
+                    skipped["empty"] = skipped.get("empty", 0) + 1
         base += table.num_rows

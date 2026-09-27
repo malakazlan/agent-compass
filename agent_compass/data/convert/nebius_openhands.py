@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from agent_compass.data.convert.nebius_swe_agent import EmptyTrajectory
 from agent_compass.data.schema import Step, Trajectory, repo_key
 
 SOURCE = "nebius/SWE-rebench-openhands-trajectories"
@@ -73,9 +74,13 @@ def convert_row(row: dict[str, Any], *, source: str = SOURCE) -> Trajectory:
     if resolved not in (0, 1):
         raise ValueError(f"{row.get('instance_id')}: resolved={resolved!r} is not a usable label")
     msgs = row["trajectory"]
+    if len(msgs) >= 2 and msgs[0]["role"] == "system" and msgs[1]["role"] == "user" and len(msgs) < 3:
+        raise EmptyTrajectory(f"{row.get('instance_id')}: no agent steps")
     if len(msgs) < 3 or msgs[0]["role"] != "system" or msgs[1]["role"] != "user":
         raise ValueError(f"{row.get('instance_id')}: unexpected message prefix {[m['role'] for m in msgs[:3]]}")
     task = extract_issue(msgs[1]["content"])
+    if not any(m["role"] == "assistant" for m in msgs[2:]):
+        raise EmptyTrajectory(f"{row.get('instance_id')}: no assistant turns")
 
     # Observations are looked up by tool_call_id so a missing or reordered tool message
     # cannot shift observations onto the wrong step.
@@ -142,8 +147,8 @@ def convert_row(row: dict[str, Any], *, source: str = SOURCE) -> Trajectory:
     )
 
 
-def convert_parquet(path: str | Path, *, source: str = SOURCE) -> Iterator[Trajectory]:
-    """Stream the (single, large) parquet row-group by row-group; skips resolved=-1 rows."""
+def convert_parquet(path: str | Path, *, source: str = SOURCE, skipped: dict[str, int] | None = None) -> Iterator[Trajectory]:
+    """Stream the (single, large) parquet row-group by row-group; skips resolved=-1 rows and empty runs."""
     import pyarrow.parquet as pq
 
     pf = pq.ParquetFile(Path(path))
@@ -151,5 +156,11 @@ def convert_parquet(path: str | Path, *, source: str = SOURCE) -> Iterator[Traje
     for rg in range(pf.num_row_groups):
         for row in pf.read_row_group(rg, columns=cols).to_pylist():
             if row["resolved"] not in (0, 1):
+                if skipped is not None:
+                    skipped["unlabelled"] = skipped.get("unlabelled", 0) + 1
                 continue
-            yield convert_row(row, source=source)
+            try:
+                yield convert_row(row, source=source)
+            except EmptyTrajectory:
+                if skipped is not None:
+                    skipped["empty"] = skipped.get("empty", 0) + 1

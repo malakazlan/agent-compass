@@ -20,7 +20,7 @@ from agent_compass.data.candidates import build_candidate_set
 from agent_compass.data.labels import RuleConfig, TaskStats, label_prefix
 from agent_compass.data.prefixes import prefix_fraction, sample_prefix_lengths
 from agent_compass.data.schema import Step, Trajectory
-from agent_compass.data.state import StateConfig, Tokenizer, build_state, chars_per_token_counter
+from agent_compass.data.state import StateConfig, Tokenizer, build_state_with_count, chars_per_token_counter
 
 QUESTIONS = {
     "p_success": {
@@ -95,7 +95,7 @@ def build_records(
         policy = None
         if state_cfg.policy and rng.random() < cfg.policy_dropout:
             policy = state_cfg.policy_unknown_token
-        state = build_state(view, L, state_cfg, count, policy_override=policy)
+        state, state_tokens = build_state_with_count(view, L, state_cfg, count, policy_override=policy)
         labels = label_prefix(traj, L, stats, cfg.rules)
 
         qs: dict[str, dict] = {}
@@ -140,7 +140,7 @@ def build_records(
                 "progress_reasons": list(labels.progress_reasons),
                 "best_next": cand_meta,
                 "variant": cfg.variant,
-                "state_tokens": count(state),
+                "state_tokens": state_tokens,
             },
         }
 

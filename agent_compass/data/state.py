@@ -43,10 +43,35 @@ def chars_per_token_counter(chars_per_token: float = 3.5) -> Tokenizer:
 
 
 def hf_tokenizer_counter(tokenizer_json: str | Path) -> Tokenizer:
+    """Token counter backed by a HF `tokenizer.json`. The returned callable also has a
+    `.many(list[str]) -> list[int]` method that encodes in one batched Rust call."""
     from tokenizers import Tokenizer as _Tok
 
     tok = _Tok.from_file(str(tokenizer_json))
-    return lambda s: len(tok.encode(s, add_special_tokens=False).ids)
+
+    def count(s: str) -> int:
+        return len(tok.encode(s, add_special_tokens=False).ids)
+
+    def many(texts: list[str]) -> list[int]:
+        return [len(e.ids) for e in tok.encode_batch(texts, add_special_tokens=False)] if texts else []
+
+    count.many = many  # type: ignore[attr-defined]
+    return count
+
+
+def count_many(count: Tokenizer, texts: list[str]) -> list[int]:
+    many = getattr(count, "many", None)
+    return many(texts) if many else [count(x) for x in texts]
+
+
+def preslice(text: str, keep_chars: int) -> str:
+    """Keep the first and last `keep_chars` characters of a very long text. Everything we
+    ever render or summarise lives at the ends, and regexes over 50k-char observations
+    were the second largest cost in the pipeline."""
+    if len(text) <= 2 * keep_chars + 64:
+        return text
+    omitted = text[keep_chars:-keep_chars].count("\n")
+    return text[:keep_chars] + f"\n... [{omitted} lines omitted] ...\n" + text[-keep_chars:]
 
 
 # Lines that never help and cost tokens: SWE-agent shell footers, ANSI codes, long rules.
@@ -78,7 +103,7 @@ def clean_observation(text: str) -> str:
 
 def summarize_observation(text: str, max_chars: int = 100) -> str:
     """The one line most likely to tell you what happened: a test summary, else the first error line, else the first line."""
-    text = clean_observation(text)
+    text = clean_observation(preslice(text, 4000))
     if not text:
         return "(no output)"
     m = _TEST_SUMMARY.findall(text)
@@ -96,23 +121,23 @@ def one_line(action: str, max_chars: int = 80) -> str:
 
 def truncate_middle(text: str, count: Tokenizer, max_tokens: int, head_frac: float = 0.6) -> str:
     """Keep the head and the tail of a long observation; the middle is where the noise is."""
+    text = preslice(text, max_tokens * 6)  # nothing further from the ends can survive anyway
     if count(text) <= max_tokens:
         return text
     lines = text.splitlines()
+    line_tok = count_many(count, [ln + "\n" for ln in lines])  # one batched call
     head_budget = int(max_tokens * head_frac)
     tail_budget = max_tokens - head_budget
     head: list[str] = []
     used = 0
-    for ln in lines:
-        c = count(ln + "\n")
+    for ln, c in zip(lines, line_tok):
         if used + c > head_budget:
             break
         head.append(ln)
         used += c
     tail: list[str] = []
     used = 0
-    for ln in reversed(lines[len(head):]):
-        c = count(ln + "\n")
+    for ln, c in zip(reversed(lines[len(head):]), reversed(line_tok[len(head):])):
         if used + c > tail_budget:
             break
         tail.append(ln)
@@ -139,6 +164,8 @@ class StateConfig:
 
 
 def _cap(text: str, count: Tokenizer, max_tokens: int) -> str:
+    if len(text) > max_tokens * 8:  # cannot fit; skip tokenizing the whole thing
+        text = text[: max_tokens * 8]
     if count(text) <= max_tokens:
         return text
     lo, hi = 0, len(text)
@@ -156,7 +183,7 @@ def render_recent_step(idx: int, s: Step, cfg: StateConfig, count: Tokenizer) ->
     if cfg.thoughts and s.thought:
         parts.append("> " + _cap(" ".join(s.thought.split()), count, cfg.thought_max_tokens))
     parts.append("$ " + _cap(s.action, count, cfg.action_max_tokens))
-    obs = clean_observation(s.observation)
+    obs = clean_observation(preslice(s.observation, cfg.obs_max_tokens * 6))
     parts.append(truncate_middle(obs, count, cfg.obs_max_tokens) if obs else "(no output)")
     return "\n".join(parts)
 
@@ -172,65 +199,121 @@ def build_state(
     count: Tokenizer | None = None,
     policy_override: str | None = None,
 ) -> str:
-    """State text for the first `prefix_len` steps of `traj` (1 <= prefix_len <= len(steps))."""
+    """State text for the first `prefix_len` steps of `traj` (1 <= prefix_len <= len(steps)).
+
+    Fitting works on per-block token counts (additive, computed once) and only tokenizes
+    the assembled text at the end for a final check, so cost is linear in the number of
+    blocks rather than quadratic.
+    """
     if not 1 <= prefix_len <= len(traj.steps):
         raise ValueError(f"prefix_len must be in [1, {len(traj.steps)}], got {prefix_len}")
     count = count or chars_per_token_counter()
     t = cfg.tags
     steps = traj.steps[:prefix_len]
+    nl = "\n"
 
-    task = _cap(traj.task.strip(), count, cfg.task_max_tokens)
-    task_block = f"<{t['task']}>\n{task}\n</{t['task']}>"
-    policy_block = ""
+    task_text = _cap(traj.task.strip(), count, cfg.task_max_tokens)
+    policy_name = None
     if cfg.policy:
-        name = policy_override if policy_override is not None else (traj.policy_model or cfg.policy_unknown_token)
-        policy_block = f"<{t['policy']}>{name}</{t['policy']}>"
+        policy_name = policy_override if policy_override is not None else (traj.policy_model or cfg.policy_unknown_token)
+
+    def task_block(text: str) -> str:
+        return f"<{t['task']}>{nl}{text}{nl}</{t['task']}>"
+
+    def omitted_line(k: int) -> str:
+        return f"... {k} earlier steps omitted ..."
+
+    policy_block = f"<{t['policy']}>{policy_name}</{t['policy']}>" if policy_name is not None else ""
 
     n_recent = min(cfg.recent_steps, len(steps))
     recent_idx = list(range(len(steps) - n_recent, len(steps)))
-    hist_idx = list(range(0, len(steps) - n_recent))
-
+    hist_lines = [render_hist_line(i + 1, steps[i], cfg) for i in range(0, len(steps) - n_recent)]
     recent_blocks = [render_recent_step(i + 1, steps[i], cfg, count) for i in recent_idx]
-    hist_lines = [render_hist_line(i + 1, steps[i], cfg) for i in hist_idx]
-
-    def assemble(hist: list[str], recent: list[str], omitted: int) -> str:
-        blocks = [task_block]
-        if policy_block:
-            blocks.append(policy_block)
-        if hist or omitted:
-            body = ([f"... {omitted} earlier steps omitted ..."] if omitted else []) + hist
-            blocks.append(f"<{t['hist']}>\n" + "\n".join(body) + f"\n</{t['hist']}>")
-        blocks.append(f"<{t['recent']}>\n" + "\n\n".join(recent) + f"\n</{t['recent']}>")
-        return "\n".join(blocks)
-
+    hist_tok = [count(x) + 1 for x in hist_lines]
+    recent_tok = [count(x) + 2 for x in recent_blocks]
+    fixed = count(task_block(task_text)) + (count(policy_block) + 1 if policy_block else 0) + 8  # tag lines
     omitted = 0
-    text = assemble(hist_lines, recent_blocks, omitted)
-    # 1) drop history from the oldest line
-    while count(text) > cfg.budget and hist_lines:
+
+    def total() -> int:
+        extra = (count(omitted_line(omitted)) + 1 if omitted else 0) + (4 if hist_lines or omitted else 0)
+        return fixed + sum(hist_tok) + sum(recent_tok) + extra
+
+    def drop_oldest_hist() -> None:
+        nonlocal omitted
         hist_lines.pop(0)
+        hist_tok.pop(0)
         omitted += 1
-        text = assemble(hist_lines, recent_blocks, omitted)
-    # 2) demote the oldest recent steps to history lines
-    while count(text) > cfg.budget and len(recent_blocks) > 1:
+
+    def demote_oldest_recent() -> None:
         i = recent_idx.pop(0)
         recent_blocks.pop(0)
-        hist_lines.append(render_hist_line(i + 1, steps[i], cfg))
-        text = assemble(hist_lines, recent_blocks, omitted)
-        while count(text) > cfg.budget and hist_lines:
-            hist_lines.pop(0)
-            omitted += 1
-            text = assemble(hist_lines, recent_blocks, omitted)
-    # 3) shrink the last observation, then the task
-    if count(text) > cfg.budget:
+        recent_tok.pop(0)
+        line = render_hist_line(i + 1, steps[i], cfg)
+        hist_lines.append(line)
+        hist_tok.append(count(line) + 1)
+
+    # 1) drop history from the oldest line
+    while total() > cfg.budget and hist_lines:
+        drop_oldest_hist()
+    # 2) demote the oldest recent steps to history lines
+    while total() > cfg.budget and len(recent_blocks) > 1:
+        demote_oldest_recent()
+        while total() > cfg.budget and hist_lines:
+            drop_oldest_hist()
+    # 3) shrink the last observation
+    if total() > cfg.budget:
         last = steps[recent_idx[-1]]
         for obs_tokens in (150, 80, 40):
-            small = StateConfig(**{**cfg.__dict__, "obs_max_tokens": obs_tokens})
+            small = StateConfig(**{**cfg.__dict__, "obs_max_tokens": obs_tokens, "action_max_tokens": min(cfg.action_max_tokens, obs_tokens)})
             recent_blocks[-1] = render_recent_step(recent_idx[-1] + 1, last, small, count)
-            text = assemble(hist_lines, recent_blocks, omitted)
-            if count(text) <= cfg.budget:
+            recent_tok[-1] = count(recent_blocks[-1]) + 2
+            if total() <= cfg.budget:
                 break
-    if count(text) > cfg.budget:
-        room = cfg.budget - count(text.replace(task, ""))
-        task_block = f"<{t['task']}>\n{_cap(traj.task.strip(), count, max(32, room))}\n</{t['task']}>"
-        text = assemble(hist_lines, recent_blocks, omitted)
+    # 4) shrink the task
+    if total() > cfg.budget:
+        room = cfg.budget - (total() - count(task_block(task_text)))
+        task_text = _cap(traj.task.strip(), count, max(16, room - 8))
+        fixed = count(task_block(task_text)) + (count(policy_block) + 1 if policy_block else 0) + 8
+
+    def assemble() -> str:
+        blocks = [task_block(task_text)]
+        if policy_block:
+            blocks.append(policy_block)
+        if hist_lines or omitted:
+            body = ([omitted_line(omitted)] if omitted else []) + hist_lines
+            blocks.append(f"<{t['hist']}>{nl}" + nl.join(body) + f"{nl}</{t['hist']}>")
+        blocks.append(f"<{t['recent']}>{nl}" + (nl + nl).join(recent_blocks) + f"{nl}</{t['recent']}>")
+        return nl.join(blocks)
+
+    # Final check. Per-block sums can be off by a few tokens at joins, so when the estimate
+    # is within `SAFETY` of the budget we tokenize the whole text once and adjust; when it is
+    # comfortably below we trust the estimate (a full 4k-token encode costs ~10 ms).
+    text = assemble()
+    est = total()
+    if est <= cfg.budget - SAFETY:
+        _LAST_COUNT[0] = est
+        return text
+    n = count(text)
+    while n > cfg.budget and (hist_lines or len(recent_blocks) > 1):
+        if hist_lines:
+            drop_oldest_hist()
+        else:
+            demote_oldest_recent()
+        text = assemble()
+        n = count(text)
+    if n > cfg.budget:
+        task_text = _cap(task_text, count, max(8, count(task_text) - (n - cfg.budget) - 4))
+        text = assemble()
+        n = count(text)
+    _LAST_COUNT[0] = n
     return text
+
+
+SAFETY = 64
+_LAST_COUNT = [0]
+
+
+def build_state_with_count(*args, **kwargs) -> tuple[str, int]:
+    """`build_state` plus the token count it established (exact when near the budget, else the additive estimate)."""
+    text = build_state(*args, **kwargs)
+    return text, _LAST_COUNT[0]
