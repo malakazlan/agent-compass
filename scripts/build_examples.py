@@ -53,14 +53,19 @@ def index_file(path: Path) -> tuple[dict[str, list[int]], dict[str, TaskStats], 
 _W: dict = {}
 
 
-def _init(inp: str, tokenizer: str | None, cfg_kwargs: dict) -> None:
+def _init(inp: str, tokenizer: str | None, cfg_kwargs: dict, wanted: set[str], keep_ids: set[str]) -> None:
+    # Shared, read-only state lives in the worker once. Putting `keep_ids` (tens of thousands
+    # of ids) into every job tuple pickled a copy per task and exhausted RAM.
     _W["f"] = open(inp, "rb")
     _W["count"] = hf_tokenizer_counter(tokenizer) if tokenizer else chars_per_token_counter()
     _W["cfg"] = BuildConfig(state=StateConfig(**cfg_kwargs.pop("state")), **cfg_kwargs)
+    _W["wanted"] = wanted
+    _W["keep_ids"] = keep_ids
 
 
-def _work(job: tuple[str, list[int], TaskStats | None, set[str], set[str]]) -> tuple[list[tuple[str, str]], dict]:
-    task_id, offs, stats, wanted, keep_ids = job
+def _work(job: tuple[str, list[int], TaskStats | None]) -> tuple[list[tuple[str, str]], dict]:
+    task_id, offs, stats = job
+    wanted, keep_ids = _W["wanted"], _W["keep_ids"]
     f = _W["f"]
     runs = []
     for off in offs:
@@ -125,7 +130,7 @@ def main() -> None:
     tasks = list(offsets.items())
     if args.limit:
         tasks = tasks[: args.limit]
-    jobs = [(task_id, offs, stats.get(task_id), wanted, keep_ids) for task_id, offs in tasks]
+    jobs = [(task_id, offs, stats.get(task_id)) for task_id, offs in tasks]
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     files = {sp: (args.out.parent / f"{args.out.name}.{sp}.jsonl").open("w", encoding="utf-8", newline="\n") for sp in wanted}
@@ -150,7 +155,7 @@ def main() -> None:
             el = time.time() - t1
             print(f"  {done}/{len(jobs)} tasks, {agg['trajectories']} trajectories, {sum(agg['records'].values())} records, {el:.0f}s, eta {el / done * (len(jobs) - done):.0f}s", flush=True)
 
-    init_args = (str(args.inp), str(args.tokenizer) if args.tokenizer else None, cfg_kwargs)
+    init_args = (str(args.inp), str(args.tokenizer) if args.tokenizer else None, cfg_kwargs, wanted, keep_ids)
     if args.workers > 1:
         with Pool(args.workers, initializer=_init, initargs=init_args) as pool:
             for result in pool.imap_unordered(_work, jobs, chunksize=4):
