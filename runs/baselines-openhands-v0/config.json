@@ -1,0 +1,11 @@
+{
+ "train": "data\\examples\\openhands.train.jsonl",
+ "eval": [
+  "data\\examples\\openhands.dev.jsonl",
+  "data\\examples\\openhands.test.jsonl"
+ ],
+ "run_id": "baselines-openhands-v0",
+ "max_records": null,
+ "n_boot": 300,
+ "seed": 0
+}

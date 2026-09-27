@@ -1,0 +1,11 @@
+{
+ "train": "data\\examples\\swe_agent.train.jsonl",
+ "eval": [
+  "data\\examples\\swe_agent.dev.jsonl",
+  "data\\examples\\swe_agent.test.jsonl"
+ ],
+ "run_id": "baselines-swe_agent-v0",
+ "max_records": null,
+ "n_boot": 300,
+ "seed": 0
+}

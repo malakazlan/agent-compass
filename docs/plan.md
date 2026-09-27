@@ -1,5 +1,11 @@
 # agent-compass: plan
 
+**Status 2026-09-28.** Tasks 1, 4, 5, 6, 7, 8 (local part) and 9 of section 6 are done; M1 is
+complete and M2 is complete except the judge-model validation of stuck/progress samples. See
+`docs/data_m1.md` (measured data), `docs/label_qa_findings.md` (label QA, escalate redundancy),
+`docs/baselines_v0.md` (the bar to beat: AUROC 0.667 SWE-agent / 0.619 OpenHands on held-out
+repos). No GPU used yet. Next: task 2 and 3 (pod setup, M0 kev reproduction) then task 10 (M3 run).
+
 Written 2026-09-25 after the study phase. Sources: `docs/kev_study.md`, `docs/related_work.md`,
 `docs/data_audit.md`, `docs/data_audit_secondary.md`. Every number below is quoted from those docs
 and carries its citation there; nothing here has been measured by us yet.
