@@ -88,7 +88,19 @@ _TEST_SUMMARY = re.compile(r"\b(\d+ (?:passed|failed|error|errors|skipped|xfaile
 _ERROR_LINE = re.compile(r"^.*\b(?:Error|Exception|Traceback|FAILED|fatal:|not found|No such file|SyntaxError)\b.*$", re.M)
 
 
+_REPEAT = re.compile(r"([=\-_*#~.])\1{7,}")  # pytest banners padded to the terminal width (seen: 1,000 chars)
+_INNER_SPACES = re.compile(r"(?<=\S) {3,}(?=\S)")  # column padding inside a line; leading indentation is untouched
+
+
+def collapse_padding(text: str) -> str:
+    """Cheap, applied to the raw observation before any slicing: a 1,000-char pytest banner
+    becomes 8 chars, a test line padded with 900 spaces before `[ 50%]` keeps two."""
+    text = _REPEAT.sub(lambda m: m.group(1) * 8, text)
+    return _INNER_SPACES.sub("  ", text)
+
+
 def clean_observation(text: str) -> str:
+    text = collapse_padding(text)
     text = _ANSI.sub("", text)
     text = _LEAK.sub("", text)
     text = _FOOTER.sub("", text)
@@ -103,7 +115,7 @@ def clean_observation(text: str) -> str:
 
 def summarize_observation(text: str, max_chars: int = 100) -> str:
     """The one line most likely to tell you what happened: a test summary, else the first error line, else the first line."""
-    text = clean_observation(preslice(text, 4000))
+    text = clean_observation(preslice(collapse_padding(text), 4000))
     if not text:
         return "(no output)"
     m = _TEST_SUMMARY.findall(text)
@@ -183,7 +195,7 @@ def render_recent_step(idx: int, s: Step, cfg: StateConfig, count: Tokenizer) ->
     if cfg.thoughts and s.thought:
         parts.append("> " + _cap(" ".join(s.thought.split()), count, cfg.thought_max_tokens))
     parts.append("$ " + _cap(s.action, count, cfg.action_max_tokens))
-    obs = clean_observation(preslice(s.observation, cfg.obs_max_tokens * 6))
+    obs = clean_observation(preslice(collapse_padding(s.observation), cfg.obs_max_tokens * 6))
     parts.append(truncate_middle(obs, count, cfg.obs_max_tokens) if obs else "(no output)")
     return "\n".join(parts)
 
@@ -225,9 +237,12 @@ def build_state(
 
     policy_block = f"<{t['policy']}>{policy_name}</{t['policy']}>" if policy_name is not None else ""
 
-    n_recent = min(cfg.recent_steps, len(steps))
-    recent_idx = list(range(len(steps) - n_recent, len(steps)))
-    hist_lines = [render_hist_line(i + 1, steps[i], cfg) for i in range(0, len(steps) - n_recent)]
+    # With thoughts removed, a `think` step is content-free ("$ think" / "Your thought has been
+    # logged."), so it is not rendered; step numbers stay those of the original trajectory.
+    visible = [i for i, s in enumerate(steps) if cfg.thoughts or s.action.strip() != "think"] or [len(steps) - 1]
+    n_recent = min(cfg.recent_steps, len(visible))
+    recent_idx = visible[len(visible) - n_recent :]
+    hist_lines = [render_hist_line(i + 1, steps[i], cfg) for i in visible[: len(visible) - n_recent]]
     recent_blocks = [render_recent_step(i + 1, steps[i], cfg, count) for i in recent_idx]
     hist_tok = [count(x) + 1 for x in hist_lines]
     recent_tok = [count(x) + 2 for x in recent_blocks]

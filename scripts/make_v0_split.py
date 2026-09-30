@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import random
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -20,6 +21,16 @@ ROOT = Path(__file__).resolve().parents[1]
 EX = ROOT / "data" / "examples"
 OUT = ROOT / "data" / "v0"
 DATASETS = ("swe_agent", "openhands")
+
+
+FINISH_ACTIONS = {"submit", "finish"}
+_LAST_ACTION = re.compile(r"^\$ (\S+)", re.M)
+
+
+def last_visible_action(state: str) -> str:
+    i = state.find("<recent>")
+    acts = _LAST_ACTION.findall(state[i:] if i >= 0 else state)
+    return acts[-1] if acts else ""
 
 
 def stream(path: Path):
@@ -69,9 +80,18 @@ def main() -> None:
             src = EX / f"{ds}.{split}.jsonl"
             all_recs.extend(subsample_by_trajectory(src, per, args.seed) if per else stream(src))
         random.Random(args.seed + 1).shuffle(all_recs)  # every file is shuffled so a head cut is a fair mix of both datasets
+        dropped = Counter()
         with (OUT / f"{split}.jsonl").open("w", encoding="utf-8", newline="\n") as f:
             for r in all_recs:
                 if not all(q in r["questions"] for q in qids):
+                    continue
+                # Strict prefix rule: the state must never be the whole run, and its last visible
+                # action must not be the agent finishing (that would reveal the run is over).
+                if r["_meta"]["prefix_len"] >= r["_meta"]["n_steps"]:
+                    dropped["prefix_is_full_run"] += 1
+                    continue
+                if last_visible_action(r["state"]) in FINISH_ACTIONS:
+                    dropped["last_action_is_finish"] += 1
                     continue
                 f.write(json.dumps(keep_only(r, qids), ensure_ascii=False) + "\n")
                 n += 1
@@ -85,6 +105,7 @@ def main() -> None:
             "positive_rate": round(pos / max(1, n), 4),
             "state_tokens_p50_p90": [tokens[len(tokens) // 2], tokens[int(0.9 * len(tokens))]] if tokens else None,
             "state_tokens_total": sum(tokens),
+            "dropped": dict(dropped),
         }
         print(split, stats["files"][split], flush=True)
     (OUT / "stats.json").write_text(json.dumps(stats, indent=1) + "\n", encoding="utf-8", newline="\n")

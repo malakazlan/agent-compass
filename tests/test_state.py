@@ -107,3 +107,35 @@ def test_real_tokenizer_budget():
     t = traj(n_steps=40, obs_lines=60)
     s = build_state(t, prefix_len=40, cfg=StateConfig(budget=2048), count=real)
     assert real(s) <= 2048
+
+
+def test_collapse_padding_shrinks_pytest_banners_and_column_padding():
+    from agent_compass.data.state import collapse_padding
+
+    banner = "=" * 400 + " 2 passed in 0.5s " + "=" * 400
+    padded = "test_x.py::test_a PASSED" + " " * 900 + "[ 50%]"
+    code = "    def f():\n        return 1"  # leading indentation must survive
+    out = collapse_padding("\n".join([banner, padded, code]))
+    lines = out.splitlines()
+    assert lines[0] == "=" * 8 + " 2 passed in 0.5s " + "=" * 8
+    assert lines[1] == "test_x.py::test_a PASSED  [ 50%]"
+    assert lines[2:] == ["    def f():", "        return 1"]
+    assert summarize_observation(banner) == "2 passed"
+
+
+def test_think_steps_are_hidden_without_thoughts_and_kept_with_thoughts():
+    steps = [
+        Step(action="ls", observation="a.py"),
+        Step(action="think", observation="Your thought has been logged.", thought="Let me plan."),
+        Step(action="open a.py", observation="[File: a.py]"),
+    ]
+    t = Trajectory(traj_id="t", task_id="o__r-1", domain="swe", scaffold="openhands-0.54", policy_model="q",
+                   repo_or_site="o/r", task="fix", steps=steps, outcome=True, meta={})
+    off = build_state(t, 3, count=count)
+    assert "$ think" not in off and "thought has been logged" not in off
+    assert "## step 1" in off and "## step 3" in off  # original numbering kept
+    on = build_state(t, 3, cfg=StateConfig(thoughts=True), count=count)
+    assert "$ think" in on and "> Let me plan." in on
+    # a prefix that is only a think step still renders something
+    only = build_state(t.model_copy(update={"steps": steps[1:2]}), 1, count=count)
+    assert "## step 1" in only
