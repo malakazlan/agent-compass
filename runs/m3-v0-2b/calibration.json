@@ -1,0 +1,9 @@
+{
+ "temperature_fitted_on_dev": 1.5948625634942193,
+ "test_calibrated": {
+  "auroc": 0.7745929026896834,
+  "brier": 0.18367750596667984,
+  "ece15": 0.047885247060999274,
+  "confident_error_0.9": 0.007
+ }
+}
