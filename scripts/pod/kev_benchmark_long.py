@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -47,6 +48,8 @@ def main() -> None:
     dtype_name = str(opts.dtype).replace("torch.", "") if opts.dtype else "fp32"
     print(f"records {len(records)}  context {context}  dtype {dtype_name}", flush=True)
 
+    if Path(a.out).exists():  # evaluate_records refuses to reuse a directory
+        shutil.rmtree(a.out)
     t0 = time.time()
     predictor = LocalPredictor(a.run, a.device, opts, context=context)
     load_s = time.time() - t0
