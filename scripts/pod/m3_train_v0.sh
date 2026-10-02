@@ -71,9 +71,13 @@ WALL=$(( $(date +%s) - START ))
 echo "train wall: ${WALL}s"
 nvidia-smi --query-gpu=memory.used,memory.total --format=csv
 
-echo "== evaluate (kev.benchmark -> rows.json), then agent-compass metrics"
-uv run python -m kev.benchmark --run "runs/$RUN" --data "$DEV"  --device cuda --out "runs/$RUN/eval-dev"  2>&1 | tail -5
-uv run python -m kev.benchmark --run "runs/$RUN" --data "$TEST" --device cuda --out "runs/$RUN/eval-test" 2>&1 | tail -5
+echo "== evaluate (kev.benchmark with a long-state context -> rows.json), then agent-compass metrics"
+# kev.benchmark --data admits only 384-token states; the wrapper runs the same evaluation with our context.
+# KEV_DTYPE=bf16: kev's bf16 scoring path (probabilities within ~0.01 of fp32, several times faster).
+DEV_LIMIT="${DEV_LIMIT:-0}"; TEST_LIMIT="${TEST_LIMIT:-0}"
+BENCH="$AC/scripts/pod/kev_benchmark_long.py"
+KEV_DTYPE="${KEV_DTYPE:-bf16}" uv run python "$BENCH" --run "runs/$RUN" --data "$DEV"  --device cuda --max_state "$MAX_STATE" --limit "$DEV_LIMIT"  --out "runs/$RUN/eval-dev"  2>&1 | tail -12
+KEV_DTYPE="${KEV_DTYPE:-bf16}" uv run python "$BENCH" --run "runs/$RUN" --data "$TEST" --device cuda --max_state "$MAX_STATE" --limit "$TEST_LIMIT" --out "runs/$RUN/eval-test" 2>&1 | tail -12
 cd "$AC"
 uv run --python 3.12 --with numpy python scripts/eval_rows.py --rows "$WORK/kev/runs/$RUN/eval-dev/rows.json"  --records "$DEV"  --out "$WORK/kev/runs/$RUN/metrics_dev.json"
 uv run --python 3.12 --with numpy python scripts/eval_rows.py --rows "$WORK/kev/runs/$RUN/eval-test/rows.json" --records "$TEST" --out "$WORK/kev/runs/$RUN/metrics_test.json" \
