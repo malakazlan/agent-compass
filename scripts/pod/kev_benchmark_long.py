@@ -44,7 +44,8 @@ def main() -> None:
         records = records[: a.limit]
     context = training_context(a.max_state)
     opts = LoadOptions.from_env()
-    print(f"records {len(records)}  context {context}  dtype {opts.dtype or 'fp32'}", flush=True)
+    dtype_name = str(opts.dtype).replace("torch.", "") if opts.dtype else "fp32"
+    print(f"records {len(records)}  context {context}  dtype {dtype_name}", flush=True)
 
     t0 = time.time()
     predictor = LocalPredictor(a.run, a.device, opts, context=context)
@@ -61,7 +62,7 @@ def main() -> None:
         "eval_seconds": round(eval_s, 1),
         "seconds_per_record": round(eval_s / max(1, cov.get("evaluated_records") or 1), 3),
         "max_state": a.max_state,
-        "dtype": opts.dtype or "fp32",
+        "dtype": dtype_name,
         "clean": report.get("clean"),
     }
     report.update(long_context_eval=summary, data=a.data, run=a.run)
