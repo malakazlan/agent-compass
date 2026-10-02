@@ -26,6 +26,9 @@ ACCUM="${ACCUM:-4}"                       # effective batch 8, as in kev's recip
 MAX_STATE="${MAX_STATE:-4352}"            # our states are <= 4096 tokens; kev drops records that do not fit
 export HF_HOME="$WORK/hf"
 export UV_NO_SYNC=1 UV_LINK_MODE=copy     # keep the fused-kernel installs from m0_reproduce_kev.sh (uv run would re-sync them away)
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+# Measured on one H100 (2026-10-02), Qwen3.5-2B, 4k states: batch 2 x accum 4 with gradient checkpointing = 0.50 s/record,
+# without checkpointing = 0.33 s/record at 51 GB peak; batch 4 or 8 without checkpointing OOMs on the longest records.
 
 cd "$WORK/kev"
 AC="$WORK/agent-compass"
@@ -64,7 +67,7 @@ rm -rf "runs/$RUN"   # kev.train refuses to overwrite an existing run directory
 START=$(date +%s)
 uv run python -m kev.train --data "$TRAIN" --base "$BASE" \
   --epochs "$EPOCHS" --lr "$LR" --batch "$BATCH" --accum "$ACCUM" --dtype bf16 --device cuda \
-  --max_state "$MAX_STATE" --shared_prefix 1 --length_sort 1 --checkpointing 1 \
+  --max_state "$MAX_STATE" --shared_prefix 1 --length_sort 1 --checkpointing "${CHECKPOINTING:-0}" \
   --p_none 0 --p_none_distract 0 --p_distract 0 --p_none_pair 0 \
   --out "runs/$RUN" 2>&1 | tee "runs/$RUN.train.log" | tail -30
 WALL=$(( $(date +%s) - START ))
