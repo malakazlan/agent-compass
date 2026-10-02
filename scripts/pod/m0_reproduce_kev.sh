@@ -41,8 +41,16 @@ git checkout --quiet "$KEV_REF"
 git rev-parse HEAD
 
 echo "== python env (Python 3.13 per kev's .python-version; torch cu128 wheels)"
+export UV_LINK_MODE=copy
 uv sync --quiet
-uv run python -c "import torch, transformers, peft; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.get_device_name(0)); print('transformers', transformers.__version__, 'peft', peft.__version__)"
+# Fused Gated-DeltaNet kernels for the Qwen3.5 hybrid backbones, exactly as kev's Modal image installs them
+# (modal_app.py). Without them transformers falls back to a pure-PyTorch causal conv that OOMs an 80 GB H100
+# on the 0.8B run. `uv run` would re-sync the venv to uv.lock and revert triton to 3.4, so every later
+# command runs with UV_NO_SYNC=1.
+uv pip install -q "flash-linear-attention==0.5.2" "triton>=3.7.1"
+uv pip install -q --no-deps "https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.7.0/causal_conv1d-1.7.0%2Bcu12torch2.8cxx11abiTRUE-cp313-cp313-linux_x86_64.whl"
+export UV_NO_SYNC=1
+uv run python -c "import torch, transformers, peft, fla, triton, causal_conv1d; print('torch', torch.__version__, 'cuda', torch.cuda.is_available(), torch.cuda.get_device_name(0)); print('transformers', transformers.__version__, 'peft', peft.__version__, 'fla', fla.__version__, 'triton', triton.__version__)"
 
 echo "== HF cache on the volume"
 export HF_HOME="$WORK/hf"
@@ -53,6 +61,7 @@ echo "== smoke (~1 min): pipeline runs end to end on this GPU"
 uv run python -m kev.train --n_per_source 40 --accum 4 --device cuda --out "runs/m0-smoke" 2>&1 | tail -5
 
 echo "== q35-08b reproduction, seed $SEED (~20 min on one H100)"
+rm -rf "runs/m0-q35-08b-s$SEED"   # kev.train refuses to overwrite an existing run directory
 START=$(date +%s)
 uv run python -m kev.train --suite evals/v7/decision-v7 \
   --base Qwen/Qwen3.5-0.8B-Base --base_revision dc7cdfe2ee4154fa7e30f5b51ca41bfa40174e68 \

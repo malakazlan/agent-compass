@@ -25,6 +25,7 @@ BATCH="${BATCH:-2}"
 ACCUM="${ACCUM:-4}"                       # effective batch 8, as in kev's recipes
 MAX_STATE="${MAX_STATE:-4352}"            # our states are <= 4096 tokens; kev drops records that do not fit
 export HF_HOME="$WORK/hf"
+export UV_NO_SYNC=1 UV_LINK_MODE=copy     # keep the fused-kernel installs from m0_reproduce_kev.sh (uv run would re-sync them away)
 
 cd "$WORK/kev"
 AC="$WORK/agent-compass"
@@ -59,6 +60,7 @@ fi
 echo "train: $(wc -l < "$TRAIN") records"
 
 echo "== train ($MODE) $BASE  lr=$LR epochs=$EPOCHS batch=$BATCH x accum=$ACCUM max_state=$MAX_STATE"
+rm -rf "runs/$RUN"   # kev.train refuses to overwrite an existing run directory
 START=$(date +%s)
 uv run python -m kev.train --data "$TRAIN" --base "$BASE" \
   --epochs "$EPOCHS" --lr "$LR" --batch "$BATCH" --accum "$ACCUM" --dtype bf16 --device cuda \
