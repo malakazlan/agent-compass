@@ -59,34 +59,41 @@ Dev (5,000 records, same repositories as train): AUROC 0.758 [0.728, 0.785]; SWE
 
 ## Offline best-of-N trajectory selection (zero cost, CPU)
 
-`scripts/offline_best_of_n.py` on the 20k scored test records: for each task with at least two
+`scripts/offline_best_of_n.py` on the 20k scored test records: for each group with at least two
 scored runs, pick the run with the highest p_success at its latest scored prefix (<= 90% of the
-run, so the final patch and submission are never seen). Resolve rate of the picked run versus
-picking at random (the task's mean pass rate), picking the shortest run, and an oracle. CIs are
-task-level bootstraps of the lift (model pick minus random pick).
+run, so the final patch and submission are never seen). Compared with picking at random (the
+group's mean pass rate), the shortest run, "a run from the strongest policy model present", and an
+oracle. CIs are task-level bootstraps of the lift.
 
-| test tasks with >= 2 runs | tasks | runs/task | random pick | shortest run | **model pick** | oracle | lift [95% CI] |
+**A first version of this analysis grouped runs by task only and reported +7.4 pp overall and
++11.5 pp on SWE-agent. That number was inflated**: 123 of the 767 test tasks exist in both datasets
+(the same GitHub issue attempted by the Llama policies under SWE-agent and by Qwen3-Coder-480B
+under OpenHands), and 158 tasks mix policies. On those, "pick the strongest policy's run" scores
+0.624 and the model 0.620: the model was recognising the stronger agent, not a better run. The
+honest, deployment-realistic setting is selecting among N runs of ONE agent on one task:
+
+| within-policy groups (task x policy, >= 2 runs) | groups | runs/group | random pick | shortest | **model pick** | oracle | lift [95% CI] |
 |---|---|---|---|---|---|---|---|
-| all | 765 | 14.6 | 0.354 | 0.307 | **0.427** | 0.518 | +7.4 pp [5.5, 9.0] |
-| SWE-agent (weak policies) | 264 | 21.5 | 0.162 | 0.072 | **0.277** | 0.367 | +11.5 pp [8.2, 14.9] |
-| OpenHands (strong policy) | 501 | 11.0 | 0.455 | 0.431 | **0.507** | 0.597 | +5.2 pp [3.1, 7.1] |
-| mixed-outcome tasks only | 248 | 23.0 | 0.495 | 0.351 | **0.722** | 1.000 | +22.7 pp [17.5, 27.7] |
+| Qwen3-Coder-480B (OpenHands) | 580 | 9.1 | 0.525 | 0.526 | **0.545** | 0.640 | +2.0 pp [0.2, 3.9] |
+| Llama-3.1-70B fine-tune (SWE-agent) | 308 | 17.9 | 0.122 | 0.091 | **0.153** | 0.273 | +3.0 pp [0.7, 5.3] |
+| Llama-3.1-8B fine-tune (SWE-agent) | 52 | 6.4 | 0.090 | 0.096 | 0.096 | 0.212 | +0.6 pp [-3.4, 5.1] |
 
-Best-of-N curve (random subsets of N runs per task, 200 draws), model pick versus random pick:
+Best-of-N within policy (random subsets of N runs, 200 draws), model pick / random pick:
+Qwen 480B: N=2 0.533 / 0.525, N=4 0.540 / 0.525, N=8 0.528 / 0.514.
+Llama 70B: N=2 0.134 / 0.122, N=4 0.143 / 0.126, N=8 0.171 / 0.152.
 
-| N | all | SWE-agent | OpenHands |
-|---|---|---|---|
-| 1 | 0.354 / 0.354 | 0.162 / 0.162 | 0.456 / 0.456 |
-| 2 | 0.381 / 0.354 | 0.203 / 0.162 | 0.475 / 0.454 |
-| 4 | 0.412 / 0.358 | 0.250 / 0.168 | 0.495 / 0.456 |
-| 8 | 0.429 / 0.343 | 0.332 / 0.198 | 0.496 / 0.441 |
+Reading: the v0 model gives a real but modest selection gain when the policy is fixed, +2 to +3
+points absolute (a 25% relative gain for the weak 70B agent), significant at 95% for both main
+policies. The large cross-policy number is not a model achievement and is not claimed. The
+"shortest run" heuristic is at or below random.
 
-Reading: on the weak SWE-agent policies, picking among 8 runs with the model takes the resolve rate
-from 16% to 33%, close to doubling it; on the strong OpenHands policy the gain is +5 points. The
-"shortest run" heuristic is worse than random on both. Where selection can matter at all (tasks
-with both passing and failing runs) the model recovers 72% of what an oracle would. This is an
-offline, held-out-repository estimate of the M5 trajectory-selection experiment; the online version
-with freshly sampled runs is still to be done.
+**The ranking quality itself does not come from the policy cue.** AUROC within a single policy on
+the same test rows: Qwen 480B 0.722 [0.689, 0.763] (n=9,738), Llama-70B 0.703 [0.649, 0.755]
+(n=9,577); records whose state hid the policy name score 0.779 versus 0.773 when shown. The gap
+between a 0.70 AUROC across states and a +2 to +3 pp selection lift within a task is expected:
+within one task the runs share most of their difficulty, so the model has to separate runs on
+finer evidence than it needs across tasks. This is the first target for M4 (pairwise loss on
+same-task pairs is designed for exactly this), and the online M5 experiment remains to be done.
 
 ## Pod cost of the whole session (M0 + M3)
 
