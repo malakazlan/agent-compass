@@ -1,0 +1,152 @@
+{
+ "rows": "runs\\m3-v0-2b\\eval-test\\rows.json",
+ "records": "data\\v0\\test.jsonl",
+ "all": {
+  "label": "all",
+  "tasks": 765,
+  "runs": 11195,
+  "lift_model_minus_random": 0.07363253718776498,
+  "lift_ci95": [
+   0.05474652418580313,
+   0.08997232979111833
+  ],
+  "runs_per_task_mean": 14.63,
+  "resolve_rate_random_pick": 0.3538184432043919,
+  "resolve_rate_shortest_pick": 0.30718954248366015,
+  "resolve_rate_model_pick": 0.42745098039215684,
+  "resolve_rate_oracle": 0.5176470588235295,
+  "curve": {
+   "N=1": {
+    "model": 0.3537908496732026,
+    "random": 0.3537908496732026,
+    "tasks": 765
+   },
+   "N=2": {
+    "model": 0.38100653594771244,
+    "random": 0.35394117647058826,
+    "tasks": 765
+   },
+   "N=4": {
+    "model": 0.41197154471544717,
+    "random": 0.35848238482384825,
+    "tasks": 738
+   },
+   "N=8": {
+    "model": 0.4294642857142857,
+    "random": 0.3429793233082707,
+    "tasks": 532
+   }
+  }
+ },
+ "SWE-agent-trajectories": {
+  "label": "SWE-agent-trajectories",
+  "tasks": 264,
+  "runs": 5680,
+  "lift_model_minus_random": 0.11491242800620444,
+  "lift_ci95": [
+   0.0817681928227334,
+   0.14872198248562296
+  ],
+  "runs_per_task_mean": 21.52,
+  "resolve_rate_random_pick": 0.16160272350894705,
+  "resolve_rate_shortest_pick": 0.07196969696969698,
+  "resolve_rate_model_pick": 0.2765151515151515,
+  "resolve_rate_oracle": 0.36742424242424243,
+  "curve": {
+   "N=1": {
+    "model": 0.16102272727272726,
+    "random": 0.16102272727272726,
+    "tasks": 264
+   },
+   "N=2": {
+    "model": 0.20208333333333334,
+    "random": 0.1615530303030303,
+    "tasks": 264
+   },
+   "N=4": {
+    "model": 0.2510515873015873,
+    "random": 0.16912698412698413,
+    "tasks": 252
+   },
+   "N=8": {
+    "model": 0.32929245283018865,
+    "random": 0.19766509433962265,
+    "tasks": 212
+   }
+  }
+ },
+ "SWE-rebench-openhands-trajectories": {
+  "label": "SWE-rebench-openhands-trajectories",
+  "tasks": 501,
+  "runs": 5515,
+  "lift_model_minus_random": 0.05188025939122203,
+  "lift_ci95": [
+   0.03112633296628913,
+   0.07143509943983342
+  ],
+  "runs_per_task_mean": 11.01,
+  "resolve_rate_random_pick": 0.45510576855288976,
+  "resolve_rate_shortest_pick": 0.4311377245508982,
+  "resolve_rate_model_pick": 0.5069860279441117,
+  "resolve_rate_oracle": 0.5968063872255489,
+  "curve": {
+   "N=1": {
+    "model": 0.4532634730538922,
+    "random": 0.4532634730538922,
+    "tasks": 501
+   },
+   "N=2": {
+    "model": 0.47473053892215566,
+    "random": 0.4547904191616767,
+    "tasks": 501
+   },
+   "N=4": {
+    "model": 0.4947633744855967,
+    "random": 0.4579012345679012,
+    "tasks": 486
+   },
+   "N=8": {
+    "model": 0.495140625,
+    "random": 0.441328125,
+    "tasks": 320
+   }
+  }
+ },
+ "mixed_outcome_tasks_only": {
+  "label": "mixed",
+  "tasks": 248,
+  "runs": 5699,
+  "lift_model_minus_random": 0.22713262479290408,
+  "lift_ci95": [
+   0.17473530430975268,
+   0.27662417179000787
+  ],
+  "runs_per_task_mean": 22.98,
+  "resolve_rate_random_pick": 0.49464156875548304,
+  "resolve_rate_shortest_pick": 0.35080645161290325,
+  "resolve_rate_model_pick": 0.7217741935483871,
+  "resolve_rate_oracle": 1.0,
+  "curve": {
+   "N=1": {
+    "model": 0.4956048387096774,
+    "random": 0.4956048387096774,
+    "tasks": 248
+   },
+   "N=2": {
+    "model": 0.5765120967741936,
+    "random": 0.4940322580645161,
+    "tasks": 248
+   },
+   "N=4": {
+    "model": 0.6541260162601626,
+    "random": 0.4981910569105691,
+    "tasks": 246
+   },
+   "N=8": {
+    "model": 0.7166502463054187,
+    "random": 0.4916009852216749,
+    "tasks": 203
+   }
+  }
+ }
+}

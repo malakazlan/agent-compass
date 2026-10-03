@@ -57,6 +57,37 @@ Dev (5,000 records, same repositories as train): AUROC 0.758 [0.728, 0.785]; SWE
 - **What was left on the table**: 29k train records unused (time budget), 1 epoch, no pairwise
   loss, no multi-head. These are the M4 knobs.
 
+## Offline best-of-N trajectory selection (zero cost, CPU)
+
+`scripts/offline_best_of_n.py` on the 20k scored test records: for each task with at least two
+scored runs, pick the run with the highest p_success at its latest scored prefix (<= 90% of the
+run, so the final patch and submission are never seen). Resolve rate of the picked run versus
+picking at random (the task's mean pass rate), picking the shortest run, and an oracle. CIs are
+task-level bootstraps of the lift (model pick minus random pick).
+
+| test tasks with >= 2 runs | tasks | runs/task | random pick | shortest run | **model pick** | oracle | lift [95% CI] |
+|---|---|---|---|---|---|---|---|
+| all | 765 | 14.6 | 0.354 | 0.307 | **0.427** | 0.518 | +7.4 pp [5.5, 9.0] |
+| SWE-agent (weak policies) | 264 | 21.5 | 0.162 | 0.072 | **0.277** | 0.367 | +11.5 pp [8.2, 14.9] |
+| OpenHands (strong policy) | 501 | 11.0 | 0.455 | 0.431 | **0.507** | 0.597 | +5.2 pp [3.1, 7.1] |
+| mixed-outcome tasks only | 248 | 23.0 | 0.495 | 0.351 | **0.722** | 1.000 | +22.7 pp [17.5, 27.7] |
+
+Best-of-N curve (random subsets of N runs per task, 200 draws), model pick versus random pick:
+
+| N | all | SWE-agent | OpenHands |
+|---|---|---|---|
+| 1 | 0.354 / 0.354 | 0.162 / 0.162 | 0.456 / 0.456 |
+| 2 | 0.381 / 0.354 | 0.203 / 0.162 | 0.475 / 0.454 |
+| 4 | 0.412 / 0.358 | 0.250 / 0.168 | 0.495 / 0.456 |
+| 8 | 0.429 / 0.343 | 0.332 / 0.198 | 0.496 / 0.441 |
+
+Reading: on the weak SWE-agent policies, picking among 8 runs with the model takes the resolve rate
+from 16% to 33%, close to doubling it; on the strong OpenHands policy the gain is +5 points. The
+"shortest run" heuristic is worse than random on both. Where selection can matter at all (tasks
+with both passing and failing runs) the model recovers 72% of what an oracle would. This is an
+offline, held-out-repository estimate of the M5 trajectory-selection experiment; the online version
+with freshly sampled runs is still to be done.
+
 ## Pod cost of the whole session (M0 + M3)
 
 About 5 h 10 min of one H100 including environment build, kev reproduction (M0), the OOM detour
