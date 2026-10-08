@@ -1,0 +1,47 @@
+{
+  "args": {
+    "data": "/workspace/data/v1/train.jsonl",
+    "out": "runs/m4-v1-2b-smoke",
+    "base": "Qwen/Qwen3.5-2B-Base",
+    "base_revision": null,
+    "init_from": "runs/m3-v0-2b",
+    "lora": 16,
+    "head_dim": 256,
+    "epochs": 1,
+    "lr": 5e-05,
+    "head_lr": 0.0,
+    "weight_decay": 0.01,
+    "batch": 2,
+    "accum": 4,
+    "max_state": 4352,
+    "shared_prefix": 1,
+    "checkpointing": 0,
+    "dtype": "bf16",
+    "weights": "",
+    "ordinal": 1,
+    "pair_weight": 0.25,
+    "max_records": 600,
+    "max_steps": 0,
+    "seed": 0,
+    "log_every": 10,
+    "device": "cuda"
+  },
+  "weights": {
+    "p_success": 1.0,
+    "stuck": 0.5,
+    "progress": 0.5,
+    "steps_left": 0.5,
+    "best_next": 0.5,
+    "escalate": 0.25
+  },
+  "init_source": {
+    "init_from": "runs/m3-v0-2b",
+    "resolved": "runs/m3-v0-2b",
+    "weights_sha256": "bf13d7b97d0574ca04f0196d6480085495e39aefc75ab0c952e72b194070243a",
+    "head_sha256": "8ac5bc5728971fc4e033ac187dac284ba89ae71ccdfcdee7ad3242f7c7786eb5",
+    "tensors": 372
+  },
+  "records": 600,
+  "dropped": 0,
+  "ordinal_objective": "cumulative_link"
+}
