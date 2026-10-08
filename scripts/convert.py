@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from agent_compass.data.convert import nebius_openhands, nebius_swe_agent  # noqa: E402
+from agent_compass.data.convert import nebius_openhands, nebius_swe_agent, tau2_bench  # noqa: E402
 from agent_compass.data.schema import Trajectory, repo_key  # noqa: E402
 from agent_compass.data.splits import VERIFIED_HOLDOUT, assign_split, split_for, verified_ids, verified_repos, write_split_table  # noqa: E402
 
@@ -36,18 +36,20 @@ OUT = ROOT / "data" / "unified"
 SPLITS = ROOT / "data" / "splits"
 
 CONVERTERS = {
-    "swe_agent": nebius_swe_agent.convert_parquet,
-    "openhands": nebius_openhands.convert_parquet,
+    "swe_agent": (nebius_swe_agent.convert_parquet, "*.parquet"),
+    "openhands": (nebius_openhands.convert_parquet, "*.parquet"),
+    "tau2": (tau2_bench.convert_jsonl, "*.jsonl"),
 }
 
 
 def iter_raw(tag: str, limit: int | None, raw: Path = RAW, skipped: dict[str, int] | None = None) -> Iterator[Trajectory]:
-    files = sorted((raw / tag).rglob("*.parquet"))
+    convert_fn, pattern = CONVERTERS[tag]
+    files = sorted(f for f in (raw / tag).rglob(pattern) if ".cache" not in f.parts)
     if not files:
-        raise SystemExit(f"{tag}: no parquet under {raw / tag}; run scripts/download_data.py first")
+        raise SystemExit(f"{tag}: no {pattern} under {raw / tag}; download the raw data first")
     n = 0
     for f in files:
-        for t in CONVERTERS[tag](f, skipped=skipped):
+        for t in convert_fn(f, skipped=skipped):
             yield t
             n += 1
             if limit and n >= limit:
