@@ -44,8 +44,11 @@ def load(rows_path: Path, records_path: Path):
 
 
 def logits_of(rows: list[dict]) -> np.ndarray:
-    if "logits" in rows[0] and rows[0]["logits"]:
-        return np.array([[r["logits"][k] for k in r["keys"]] for r in rows], dtype=float)
+    lg = rows[0].get("logits")
+    if lg:
+        if isinstance(lg, dict):
+            return np.array([[r["logits"][k] for k in r["keys"]] for r in rows], dtype=float)
+        return np.array([r["logits"] for r in rows], dtype=float)  # kev: list aligned with keys
     return np.log(np.clip(np.array([r["p"] for r in rows], dtype=float), 1e-9, 1.0))
 
 

@@ -52,8 +52,17 @@ def pick_trajectories(path: Path, n_records: int, prefixes_per_traj: int, rng: r
     for r in stream(path):
         if strict_ok(r):
             by_traj[r["_meta"]["traj_id"]].append(r)
-    ids = sorted(by_traj)
-    rng.shuffle(ids)
+    # Trajectories from (task, policy) groups with BOTH outcomes first, so the ranking loss gets pairs:
+    # a group with only successes or only failures cannot form a success/failure pair.
+    outcomes: dict[tuple[str, str], set[bool]] = defaultdict(set)
+    for tid, recs in by_traj.items():
+        m = recs[0]["_meta"]
+        outcomes[(m["task_id"], m["policy_model"])].add(bool(m["outcome"]))
+    mixed = [tid for tid, recs in by_traj.items() if len(outcomes[(recs[0]["_meta"]["task_id"], recs[0]["_meta"]["policy_model"])]) == 2]
+    rest = [tid for tid in by_traj if tid not in set(mixed)]
+    rng.shuffle(mixed)
+    rng.shuffle(rest)
+    ids = mixed + rest
     out: list[dict] = []
     for tid in ids:
         if len(out) >= n_records:
