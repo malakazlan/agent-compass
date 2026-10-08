@@ -22,6 +22,7 @@ Mapping to the unified schema:
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -89,13 +90,16 @@ def convert_row(row: dict[str, Any], *, source: str = SOURCE) -> Trajectory:
 
     score = (row.get("eval_result") or {}).get("score")
     outcome = bool(score == 1.0) if score is not None else bool(meta.get("is_correct"))
+    # telecom ids look like "[mobile_data_issue]airplane_mode_on|data_mode_off[PERSONA:None]"; the repo
+    # key must be owner/repo-shaped, so the id is slugged (raw id stays in task_id and traj_id)
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "_", task_id).strip("_")
     return Trajectory(
-        traj_id=f"{TRAJ_PREFIX}/{policy}/{task_id}",
-        task_id=f"{TRAJ_PREFIX}/{task_id}",
+        traj_id=f"{TRAJ_PREFIX}/{policy}/{domain}/{task_id}",
+        task_id=f"{TRAJ_PREFIX}/{domain}/{task_id}",  # ids like "3" repeat across domains
         domain="tool",
         scaffold=SCAFFOLD,
         policy_model=policy,
-        repo_or_site=f"{TRAJ_PREFIX}/{domain}-{task_id}",
+        repo_or_site=f"{TRAJ_PREFIX}/{domain}-{slug}",
         task=task,
         steps=steps,
         outcome=outcome,

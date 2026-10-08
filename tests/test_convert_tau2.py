@@ -38,7 +38,7 @@ def test_render_call_handles_dict_and_string_args():
 
 def test_tau2_row_converts():
     t = convert_row(ROW)
-    assert t.traj_id == "tau2/Kimi-K2-Instruct/airline_3" and t.task_id == "tau2/airline_3"
+    assert t.traj_id == "tau2/Kimi-K2-Instruct/airline/airline_3" and t.task_id == "tau2/airline/airline_3"
     assert t.domain == "tool" and t.scaffold == "tau2-bench" and t.policy_model == "Kimi-K2-Instruct"
     assert t.task.startswith("[airline customer-service task] How many suitcases")
     assert t.outcome is True
