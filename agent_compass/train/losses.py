@@ -17,12 +17,23 @@ DEFAULT_WEIGHTS = {"p_success": 1.0, "stuck": 0.5, "progress": 0.5, "steps_left"
 ORDINAL_CE_MIX = 0.5
 
 
+def qtype(q: dict) -> str:
+    """kev's materialized records use `qtype`; raw records use `type`."""
+    return q.get("qtype") or q["type"]
+
+
 def label_index(q: dict) -> int:
+    """Index of the true option. Materialized records already carry an int index; raw records carry
+    a bool (noul), an option name (choice) or a level index (score)."""
     keys = q["keys"]
     label = q["label"]
-    if q["type"] == "noul":
-        return int(bool(label)) if isinstance(label, bool) else keys.index(str(label).lower())
-    if q["type"] == "choice":
+    if isinstance(label, bool):
+        return int(label)
+    if isinstance(label, int):
+        return label
+    if qtype(q) == "noul":
+        return keys.index(str(label).lower())
+    if qtype(q) == "choice":
         return keys.index(label)
     return int(label)
 
@@ -52,7 +63,7 @@ def pairwise_loss(z_success: torch.Tensor, z_fail: torch.Tensor) -> torch.Tensor
 
 def question_loss(z: torch.Tensor, q: dict, ordinal: bool = True) -> torch.Tensor:
     y = label_index(q)
-    if q["type"] == "score" and ordinal:
+    if qtype(q) == "score" and ordinal:
         return ordinal_loss(z, y)
     return F.cross_entropy(z.float()[None], torch.tensor([y], device=z.device))
 
