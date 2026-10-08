@@ -130,3 +130,35 @@ def test_label_prefix_end_to_end():
     assert label_prefix(t, 3, None).baseline is None and label_prefix(t, 3, st).escalate is None
     d = L.as_dict()
     assert set(d) >= {"p_success", "steps_left", "stuck", "progress", "escalate", "baseline", "advantage"}
+
+
+def test_error_signature_ignores_code_listings_and_prefers_exception_line():
+    from agent_compass.data.labels import error_signature
+
+    listing = "[File: /x/test.py (12 lines total)]\n8:    pcn = PaymentCardNumber(v)\n9:except Exception as e:\n10:    print(e)\nFile updated."
+    assert error_signature(listing) is None
+    search = "Found 2 matches:\nLine 597: raise ValueError('bad')\nEnd of matches"
+    assert error_signature(search) is None
+    tb = "Traceback (most recent call last):\n  File x, line 3\nValueError: bad value 12"
+    assert error_signature(tb) == "ValueError: bad value #"
+    assert error_signature("python: can't open file '/a/b.py': [Errno 2] No such file or directory") is not None
+
+
+def test_stuck_ignores_navigation_and_evolving_reruns():
+    nav = [S("scroll_down", "[File: a.py (900 lines)]\n(100 more lines above)")] * 5
+    assert stuck_label(nav).value is False
+    # re-running the reproduce script with a different error each time is debugging, not a loop
+    runs = [S("edit 1:1\nx\nend_of_edit", "File updated"), S("python repro.py", "Traceback\nTypeError: one"),
+            S("edit 2:2\ny\nend_of_edit", "File updated"), S("python repro.py", "Traceback\nValueError: two"),
+            S("edit 3:3\nz\nend_of_edit", "File updated"), S("python repro.py", "Traceback\nKeyError: three")]
+    assert stuck_label(runs, RuleConfig(window=6)).value is False
+    # the same run command hitting the same error repeatedly is a loop
+    same = [S("python repro.py", "Traceback\nTypeError: one"), S("edit 1:1\nx\nend_of_edit", "File updated"),
+            S("python repro.py", "Traceback\nTypeError: one"), S("python repro.py", "Traceback\nTypeError: one")]
+    assert stuck_label(same, RuleConfig(window=6)).value is True
+
+
+def test_parse_test_counts_unittest():
+    assert parse_test_counts("test_a ... ok\n\nRan 3 tests in 0.002s\n\nOK") == (3, 0)
+    assert parse_test_counts("Ran 4 tests in 0.1s\n\nFAILED (failures=1, errors=1)") == (2, 2)
+    assert parse_test_counts("Ran 2 tests in 0.1s\n\nFAILED (errors=1)") == (1, 1)

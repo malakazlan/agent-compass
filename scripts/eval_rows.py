@@ -103,10 +103,34 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--baseline", type=Path, default=None, help="runs/baselines-*/result.json to print side by side")
     ap.add_argument("--n-boot", type=int, default=500)
+    ap.add_argument("--labels-from-records", action="store_true",
+                    help="replace each row's label with the label in --records (scores predictions against relabelled data)")
     args = ap.parse_args()
 
     rows = [r for r in load_rows(args.rows) if r.get("variant", "clean") == "clean"]
     meta = load_meta(args.records)
+    if args.labels_from_records:
+        labels: dict[str, dict] = {}
+        with args.records.open(encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    rec = json.loads(line)
+                    labels[rec["_meta"]["id"]] = rec["questions"]
+        kept = []
+        for r in rows:
+            q = labels.get(r["id"], {}).get(r["question"])
+            if q is None:
+                continue  # question masked in the relabelled file
+            keys = [str(k).lower() for k in r["keys"]]
+            lab = q["label"]
+            if r["type"] == "noul":
+                r["label"] = keys.index(str(bool(lab)).lower())
+            elif r["type"] == "choice":
+                r["label"] = r["keys"].index(lab) if lab in r["keys"] else r["label"]
+            else:
+                r["label"] = int(lab)
+            kept.append(r)
+        rows = kept
     by_q: dict[str, list[dict]] = defaultdict(list)
     for r in rows:
         if r["id"] in meta:

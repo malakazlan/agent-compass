@@ -48,6 +48,8 @@ _ERRORISH = re.compile(r"\b(?:Traceback|Error|Exception|FAILED|fatal:|not found|
 _EDIT_OK = re.compile(r"File updated|has been edited|Your changes have been saved|successfully|The file .* has been created", re.I)
 _EDIT_BAD = re.compile(r"Your proposed edit has introduced|did not appear verbatim|No replacement was performed|Invalid `path`|is not a valid|does not exist", re.I)
 _EXPLORE = re.compile(r"^(?:open|cat|less|head|tail|view|ls|find|find_file|search_dir|search_file|grep|rg|str_replace_editor view|tree)\b")
+# Reading and moving around is never "stuck" by itself, however often it repeats.
+_NAVIGATION = re.compile(r"^(?:scroll_down|scroll_up|goto|open|ls|cd|pwd|cat|less|head|tail|find|find_file|search_dir|search_file|grep|rg|tree|str_replace_editor view|git (?:status|diff|log))\b")
 _EDIT = re.compile(r"^(?:edit\b|str_replace_editor (?:str_replace|create|insert)\b|sed -i\b|cat >\s*|echo .* >\s*)")
 _FINISH = {"submit", "finish"}
 _PATH = re.compile(r"(?:/[\w.\-]+)+|[\w.\-]+\.(?:py|js|ts|rs|go|java|c|cpp|h|md|txt|toml|cfg|ini|yaml|yml|json)\b")
@@ -76,28 +78,52 @@ def action_family(action: str) -> str:
     return (_NUM.sub("#", f"{head} {paths}".strip()) + (f" {loc}" if loc else "")).strip()
 
 
+_UNITTEST_RAN = re.compile(r"^Ran (\d+) tests? in", re.M)
+_UNITTEST_FAILED = re.compile(r"^FAILED \((?:failures=(\d+))?(?:, )?(?:errors=(\d+))?", re.M)
+_UNITTEST_OK = re.compile(r"^OK\b", re.M)
+
+
 def parse_test_counts(observation: str) -> tuple[int | None, int | None]:
+    """(passed, failed) from a pytest summary ("3 passed, 2 failed") or a unittest footer
+    ("Ran 4 tests ... OK" / "FAILED (failures=1, errors=1)"); (None, None) when neither is present."""
     p = _TEST_PASS.findall(observation)
     f = _TEST_FAIL.findall(observation)
-    passed = int(p[-1]) if p else None
-    failed = int(f[-1]) if f else None
-    if passed is None and failed is None:
-        return None, None
-    return passed or 0, failed or 0
+    if p or f:
+        return (int(p[-1]) if p else 0), (int(f[-1]) if f else 0)
+    ran = _UNITTEST_RAN.findall(observation)
+    if ran:
+        n = int(ran[-1])
+        m = _UNITTEST_FAILED.search(observation)
+        if m:
+            bad = int(m.group(1) or 0) + int(m.group(2) or 0)
+            return max(0, n - bad), bad
+        if _UNITTEST_OK.search(observation):
+            return n, 0
+    return None, None
 
 
 _EXC_LINE = re.compile(r"^\s*(?:[\w.]+\.)?\w*(?:Error|Exception|Warning)\b.*$", re.M)
 
 
+_LISTING_LINE = re.compile(r"^\s*(?:\d+[:\t|]|Line \d+:|#|\.\.\.)")  # file views, search hits, comments: never an error
+_STRICT_ERR = re.compile(r"\b(?:\w*Error|\w*Exception)\b\s*:|^\s*Traceback \(most recent|No such file or directory|not found\b|FAILED\b|fatal:", re.M)
+
+
 def error_signature(observation: str) -> str | None:
-    """A numbers-free line identifying the error: the last `SomeError: ...` line if present
-    (so two different tracebacks do not collapse onto the shared "Traceback" header),
-    otherwise the error-ish summary line."""
-    exc = _EXC_LINE.findall(observation)
+    """A numbers-free line identifying the error the agent hit, or None.
+
+    Lines that are part of a file listing or search result (`12:...`, `Line 12:`, `#` comments)
+    are ignored, otherwise `except Exception as e:` inside displayed code would count as an
+    error (seen in label QA). Preference: the last `SomeError: ...` line, else the first line
+    with a strict error marker (`Error:`, `Traceback`, `No such file`, `FAILED`)."""
+    lines = [ln for ln in observation.splitlines() if ln.strip() and not _LISTING_LINE.match(ln)]
+    exc = [ln for ln in lines if _EXC_LINE.match(ln)]
     if exc:
         return _NUM.sub("#", exc[-1].strip())[:160]
-    s = summarize_observation(observation, max_chars=160)
-    return _NUM.sub("#", s) if _ERRORISH.search(s) else None
+    for ln in lines:
+        if _STRICT_ERR.search(ln):
+            return _NUM.sub("#", ln.strip())[:160]
+    return None
 
 
 # --------------------------------------------------------------------------- outcome-derived
@@ -152,10 +178,19 @@ class RuleResult:
 def stuck_label(steps: list[Step], cfg: RuleConfig = RuleConfig()) -> RuleResult:
     win = steps[-cfg.window :]
     reasons: list[str] = []
+    # Same action repeated. Label QA (2026-10-09) showed two kinds of false positives: re-running a
+    # reproduce/test script between edits (normal debugging: the error changes each time) and
+    # repeated navigation (scroll, goto, ls, search). So: navigation never counts; a repeated run
+    # command counts only when at least two of its repeats produced the same error.
     acts = Counter(normalize_action(s.action) for s in win)
     top_a, n_a = acts.most_common(1)[0]
-    if n_a >= cfg.repeat and top_a not in _FINISH:
-        reasons.append(f"same action x{n_a}: {top_a[:60]}")
+    if n_a >= cfg.repeat and top_a not in _FINISH and not _NAVIGATION.match(top_a):
+        if _EDIT.match(top_a):
+            reasons.append(f"same action x{n_a}: {top_a[:60]}")
+        else:
+            sigs = Counter(e for e in (error_signature(s.observation) for s in win if normalize_action(s.action) == top_a) if e)
+            if sigs and sigs.most_common(1)[0][1] >= 2:
+                reasons.append(f"same action x{n_a}: {top_a[:60]}")
     errs = Counter(e for e in (error_signature(s.observation) for s in win) if e)
     if errs:
         top_e, n_e = errs.most_common(1)[0]
