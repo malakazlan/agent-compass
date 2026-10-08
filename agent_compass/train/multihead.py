@@ -180,7 +180,7 @@ def main() -> None:
                 rec_loss, terms = weighted_record_loss(zs, qs, weights, ordinal=bool(a.ordinal))
                 loss = loss + rec_loss
                 for k, v in terms.items():
-                    term_sums[k] += float(v)
+                    term_sums[k] += float(v.detach())
                     term_n[k] += 1
                 pid = r["_meta"].get("pair_id")
                 if pid and "p_success" in zs:
@@ -189,7 +189,7 @@ def main() -> None:
                 if True in d and False in d:
                     pl = pairwise_loss(d[True], d[False])
                     loss = loss + a.pair_weight * pl
-                    term_sums["pair"] += float(pl)
+                    term_sums["pair"] += float(pl.detach())
                     term_n["pair"] += 1
             (loss / len(mb) / a.accum).backward()
             seen += len(mb)
