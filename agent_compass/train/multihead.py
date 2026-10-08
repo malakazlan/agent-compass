@@ -17,6 +17,7 @@ questions, and the pairwise ranking loss on `_meta.pair_id` pairs that share a m
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import random
 import time
@@ -89,11 +90,14 @@ def main() -> None:
     ap.add_argument("--max_steps", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--log_every", type=int, default=10)
+    ap.add_argument("--device", choices=["cuda", "cpu"], default="cuda", help="cpu only for tiny dry runs of the loop")
     a = ap.parse_args()
 
     torch.manual_seed(a.seed)
     rng = random.Random(a.seed)
-    dev = "cuda"
+    dev = a.device
+    if dev == "cpu":
+        a.dtype = "fp32"
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
     weights = {**DEFAULT_WEIGHTS, **(json.loads(a.weights) if a.weights else {})}
@@ -150,7 +154,7 @@ def main() -> None:
               {"params": head_params, "lr": a.head_lr or a.lr}]
     opt = torch.optim.AdamW(groups, lr=a.lr, weight_decay=a.weight_decay)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=[a.lr, a.head_lr or a.lr], total_steps=max(total_steps, 1), pct_start=0.1)
-    autocast = torch.autocast("cuda", dtype=torch.bfloat16) if a.dtype == "bf16" else torch.autocast("cuda", enabled=False)
+    autocast = torch.autocast("cuda", dtype=torch.bfloat16) if (a.dtype == "bf16" and dev == "cuda") else contextlib.nullcontext()
 
     def qid_of(q: dict) -> str:
         return q["qid"] if "qid" in q else q["id"]
@@ -213,7 +217,7 @@ def main() -> None:
     write_meta(a.out, meta)
     tok.save_pretrained(a.out)
     write_json(out_dir / "training_metrics.json", {"wall_seconds": wall, "records_seen": seen, "optimizer_steps": step, "records": len(recs),
-                                                  "dropped": dropped, "peak_device_bytes": torch.cuda.max_memory_allocated(), "batch": a.batch, "accum": a.accum})
+                                                  "dropped": dropped, "peak_device_bytes": torch.cuda.max_memory_allocated() if dev == "cuda" else 0, "batch": a.batch, "accum": a.accum})
     print(f"saved {a.out}  wall {wall:.0f}s  {wall / max(1, seen):.3f}s/rec", flush=True)
 
 
