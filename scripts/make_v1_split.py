@@ -141,8 +141,15 @@ def main() -> None:
     train: list[dict] = []
     for ds in DATASETS:
         train.extend(pick_trajectories(EX / f"{ds}.train.jsonl", args.train_per_dataset, args.prefixes_per_traj, rng))
+    def drop_progress(recs: list[dict]) -> list[dict]:
+        # the progress rules read coding observations (tests, edits, files); on tool-use transcripts the
+        # label is a constant, so the question is masked for extra domains rather than taught as a constant
+        for r in recs:
+            r["questions"].pop("progress", None)
+        return recs
+
     for tag, n_tr, _ in extras:
-        train.extend(pick_trajectories(EX / f"{tag}.train.jsonl", n_tr, args.prefixes_per_traj, rng))
+        train.extend(drop_progress(pick_trajectories(EX / f"{tag}.train.jsonl", n_tr, args.prefixes_per_traj, rng)))
     train, pair_stats = make_pairs(train, args.pair_window, rng)
     stats["files"]["train"] = {**write(train, OUT / "train.jsonl"), **pair_stats}
     print("train", stats["files"]["train"], flush=True)
@@ -151,7 +158,7 @@ def main() -> None:
     for ds in DATASETS:
         dev.extend(pick_trajectories(EX / f"{ds}.dev.jsonl", args.dev_per_dataset, 0, rng))
     for tag, _, n_dev in extras:
-        dev.extend(pick_trajectories(EX / f"{tag}.dev.jsonl", n_dev, 0, rng))
+        dev.extend(drop_progress(pick_trajectories(EX / f"{tag}.dev.jsonl", n_dev, 0, rng)))
     rng.shuffle(dev)
     stats["files"]["dev"] = write(dev, OUT / "dev.jsonl")
     print("dev", stats["files"]["dev"], flush=True)
@@ -163,7 +170,7 @@ def main() -> None:
     stats["files"]["test"] = write(test, OUT / "test.jsonl")
     print("test", stats["files"]["test"], flush=True)
     for tag, _, _ in extras:
-        extra_test = [r for r in stream(EX / f"{tag}.test.jsonl") if strict_ok(r)]
+        extra_test = drop_progress([r for r in stream(EX / f"{tag}.test.jsonl") if strict_ok(r)])
         random.Random(args.seed + 2).shuffle(extra_test)
         stats["files"][f"test_{tag}"] = write(extra_test, OUT / f"test_{tag}.jsonl")
         print(f"test_{tag}", stats["files"][f"test_{tag}"], flush=True)

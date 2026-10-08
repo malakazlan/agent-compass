@@ -1,0 +1,10 @@
+{
+ "model": "Qwen/Qwen3.5-2B",
+ "records": 5000,
+ "seconds": 295.8,
+ "seconds_per_record": 0.059,
+ "prompt": {
+  "system": "You are an expert reviewer of AI coding agents. You will see a task and the agent's trajectory so far.",
+  "question": "Will this agent run end in success, meaning its final patch passes the task's hidden tests? Answer with a single word: yes or no."
+ }
+}
