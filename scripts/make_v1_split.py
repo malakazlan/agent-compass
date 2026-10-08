@@ -130,14 +130,19 @@ def main() -> None:
     ap.add_argument("--prefixes-per-traj", type=int, default=2, help="0 = keep all prefixes of a chosen trajectory")
     ap.add_argument("--pair-window", type=float, default=0.2)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--extra", default="", help="extra domains as tag:train_records:dev_records, comma-separated, e.g. tau2:3000:1000; "
+                                                "their test records go to a separate test_<tag>.jsonl so the SWE test stays comparable to v0")
     args = ap.parse_args()
     rng = random.Random(args.seed)
     OUT.mkdir(parents=True, exist_ok=True)
     stats: dict = {"args": vars(args), "files": {}}
+    extras = [(p.split(":")[0], int(p.split(":")[1]), int(p.split(":")[2])) for p in args.extra.split(",") if p]
 
     train: list[dict] = []
     for ds in DATASETS:
         train.extend(pick_trajectories(EX / f"{ds}.train.jsonl", args.train_per_dataset, args.prefixes_per_traj, rng))
+    for tag, n_tr, _ in extras:
+        train.extend(pick_trajectories(EX / f"{tag}.train.jsonl", n_tr, args.prefixes_per_traj, rng))
     train, pair_stats = make_pairs(train, args.pair_window, rng)
     stats["files"]["train"] = {**write(train, OUT / "train.jsonl"), **pair_stats}
     print("train", stats["files"]["train"], flush=True)
@@ -145,6 +150,8 @@ def main() -> None:
     dev: list[dict] = []
     for ds in DATASETS:
         dev.extend(pick_trajectories(EX / f"{ds}.dev.jsonl", args.dev_per_dataset, 0, rng))
+    for tag, _, n_dev in extras:
+        dev.extend(pick_trajectories(EX / f"{tag}.dev.jsonl", n_dev, 0, rng))
     rng.shuffle(dev)
     stats["files"]["dev"] = write(dev, OUT / "dev.jsonl")
     print("dev", stats["files"]["dev"], flush=True)
@@ -155,6 +162,11 @@ def main() -> None:
     random.Random(args.seed + 1).shuffle(test)
     stats["files"]["test"] = write(test, OUT / "test.jsonl")
     print("test", stats["files"]["test"], flush=True)
+    for tag, _, _ in extras:
+        extra_test = [r for r in stream(EX / f"{tag}.test.jsonl") if strict_ok(r)]
+        random.Random(args.seed + 2).shuffle(extra_test)
+        stats["files"][f"test_{tag}"] = write(extra_test, OUT / f"test_{tag}.jsonl")
+        print(f"test_{tag}", stats["files"][f"test_{tag}"], flush=True)
     (OUT / "stats.json").write_text(json.dumps(stats, indent=1) + "\n", encoding="utf-8", newline="\n")
 
 
