@@ -95,6 +95,44 @@ within one task the runs share most of their difficulty, so the model has to sep
 finer evidence than it needs across tasks. This is the first target for M4 (pairwise loss on
 same-task pairs is designed for exactly this), and the online M5 experiment remains to be done.
 
+## Offline early-abort simulation (zero cost, CPU)
+
+`scripts/offline_early_abort.py` on the same scored rows. Each test run has scored checkpoints at
+25/50/75/90% of its length plus one random one. Walking them in order, the run is aborted at the
+first checkpoint whose calibrated p_success falls below a threshold, with no abort before 20% of
+the run (Fail-Fast's floor). Thresholds are chosen on dev at a false-positive budget (share of
+successful runs aborted) and applied unchanged to test. Cost is in steps not executed; per-step
+token counts are not in the records, so "steps saved" is a proxy for tokens saved.
+
+One pooled threshold is the wrong protocol: it never fires on the 53%-success Qwen agent and
+over-fires on the 19%-success Llama agents (test FPR 14 to 17% at a 5% budget). The deployment
+protocol is one threshold per agent, chosen on that agent's own dev runs (11,196 test runs; dev
+2,007 runs):
+
+| agent | FPR budget | test FPR | failures caught | precision | runs aborted | steps saved | resolve rate no abort -> with abort |
+|---|---|---|---|---|---|---|---|
+| Llama-70B fine-tune, SWE-agent (5,514 test runs) | 5% | 0.021 | 17.8% | 97.3% | 14.8% | 12.0% | 0.190 -> 0.186 |
+| | 10% | 0.066 | 30.6% | 95.2% | 26.0% | 18.7% | 0.190 -> 0.178 |
+| | 25% | 0.214 | 51.2% | 91.0% | 45.6% | 28.5% | 0.190 -> 0.150 |
+| Qwen3-Coder-480B, OpenHands (5,291 test runs) | 5% | 0.035 | 12.8% | 76.3% | 7.9% | 3.8% | 0.529 -> 0.510 |
+| | 10% | 0.059 | 19.7% | 74.9% | 12.4% | 6.3% | 0.529 -> 0.497 |
+| | 25% | 0.126 | 32.9% | 70.0% | 22.1% | 11.8% | 0.529 -> 0.462 |
+
+Reading:
+
+- Dev-chosen thresholds transfer: test FPR lands at or under the budget for both agents, so the
+  calibrated probabilities are usable as abort scores on unseen repositories.
+- For the weak agent the trade is attractive: 12% of all steps saved for a 0.4-point resolve-rate
+  loss at the 5% budget, 28.5% saved for 4 points at 25%. For the strong agent, v0 catches too few
+  failures early (13% at 5% FPR) to save much; each false abort also costs more because half its
+  runs succeed. Fail-Fast reports 30.5% recall and 20% tokens saved at 5% FPR for a 27B policy
+  with a monitor trained on that policy's own runs; v0 is not there yet on the strong agent.
+- The simulation is conservative: it can only abort at the 4 or 5 scored checkpoints, whereas a
+  deployed monitor scores every step. Recall at the same FPR would be higher with per-step scoring.
+- Same conclusion as best-of-N: the model separates runs across tasks well (AUROC 0.70 to 0.72
+  within a policy) but is weaker at the fine within-task distinctions that abort and selection
+  need. That is what the M4 pairwise loss targets, and the number to watch after M4.
+
 ## Pod cost of the whole session (M0 + M3)
 
 About 5 h 10 min of one H100 including environment build, kev reproduction (M0), the OOM detour

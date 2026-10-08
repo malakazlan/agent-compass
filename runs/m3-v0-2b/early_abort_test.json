@@ -1,0 +1,303 @@
+{
+ "temperature": 1.5948625634942193,
+ "min_frac": 0.2,
+ "dev_runs": 2007,
+ "test_runs": 11196,
+ "operating_points": {
+  "fpr_5": {
+   "threshold": 0.12000000000000001,
+   "test": {
+    "runs": 11196,
+    "success_runs": 3936,
+    "fail_runs": 7260,
+    "fpr": 0.04141260162601626,
+    "recall": 0.27424242424242423,
+    "precision": 0.9243268337975858,
+    "fired": 0.19239013933547697,
+    "steps_saved_fraction": 0.07162692512282672,
+    "resolve_rate_no_abort": 0.3515541264737406,
+    "resolve_rate_with_abort": 0.3369953554841015
+   },
+   "by_policy": {
+    "Qwen3-Coder-480B-A35B-Instruct": {
+     "runs": 5292,
+     "success_runs": 2797,
+     "fail_runs": 2495,
+     "fpr": 0.0003575259206292456,
+     "recall": 0.0,
+     "precision": 0.0,
+     "fired": 0.0001889644746787604,
+     "steps_saved_fraction": 2.9746057903676316e-05,
+     "resolve_rate_no_abort": 0.5285336356764928,
+     "resolve_rate_with_abort": 0.528344671201814
+    },
+    "swe-agent-llama-405b": {
+     "runs": 58,
+     "success_runs": 25,
+     "fail_runs": 33,
+     "fpr": 0.16,
+     "recall": 0.5757575757575758,
+     "precision": 0.8260869565217391,
+     "fired": 0.39655172413793105,
+     "steps_saved_fraction": 0.23119266055045873,
+     "resolve_rate_no_abort": 0.43103448275862066,
+     "resolve_rate_with_abort": 0.3620689655172414
+    },
+    "swe-agent-llama-70b": {
+     "runs": 5514,
+     "success_runs": 1050,
+     "fail_runs": 4464,
+     "fpr": 0.14,
+     "recall": 0.4092741935483871,
+     "precision": 0.925531914893617,
+     "fired": 0.35799782372143635,
+     "steps_saved_fraction": 0.2385410117287257,
+     "resolve_rate_no_abort": 0.19042437431991294,
+     "resolve_rate_with_abort": 0.16376496191512513
+    },
+    "swe-agent-llama-8b": {
+     "runs": 332,
+     "success_runs": 64,
+     "fail_runs": 268,
+     "fpr": 0.171875,
+     "recall": 0.5410447761194029,
+     "precision": 0.9294871794871795,
+     "fired": 0.46987951807228917,
+     "steps_saved_fraction": 0.2839119624274795,
+     "resolve_rate_no_abort": 0.1927710843373494,
+     "resolve_rate_with_abort": 0.15963855421686746
+    }
+   }
+  },
+  "fpr_10": {
+   "threshold": 0.19,
+   "test": {
+    "runs": 11196,
+    "success_runs": 3936,
+    "fail_runs": 7260,
+    "fpr": 0.10188008130081301,
+    "recall": 0.428099173553719,
+    "precision": 0.8857224280421773,
+    "fired": 0.31341550553769204,
+    "steps_saved_fraction": 0.10724771833416405,
+    "resolve_rate_no_abort": 0.3515541264737406,
+    "resolve_rate_with_abort": 0.31573776348695964
+   },
+   "by_policy": {
+    "Qwen3-Coder-480B-A35B-Instruct": {
+     "runs": 5292,
+     "success_runs": 2797,
+     "fail_runs": 2495,
+     "fpr": 0.013943510904540579,
+     "recall": 0.05050100200400802,
+     "precision": 0.7636363636363637,
+     "fired": 0.031179138321995464,
+     "steps_saved_fraction": 0.012386258511090818,
+     "resolve_rate_no_abort": 0.5285336356764928,
+     "resolve_rate_with_abort": 0.5211640211640212
+    },
+    "swe-agent-llama-405b": {
+     "runs": 58,
+     "success_runs": 25,
+     "fail_runs": 33,
+     "fpr": 0.32,
+     "recall": 0.8484848484848485,
+     "precision": 0.7777777777777778,
+     "fired": 0.6206896551724138,
+     "steps_saved_fraction": 0.3706422018348624,
+     "resolve_rate_no_abort": 0.43103448275862066,
+     "resolve_rate_with_abort": 0.29310344827586204
+    },
+    "swe-agent-llama-70b": {
+     "runs": 5514,
+     "success_runs": 1050,
+     "fail_runs": 4464,
+     "fpr": 0.319047619047619,
+     "recall": 0.6182795698924731,
+     "precision": 0.8917609046849758,
+     "fired": 0.5612985128763148,
+     "steps_saved_fraction": 0.32885452809538224,
+     "resolve_rate_no_abort": 0.19042437431991294,
+     "resolve_rate_with_abort": 0.12966993108451216
+    },
+    "swe-agent-llama-8b": {
+     "runs": 332,
+     "success_runs": 64,
+     "fail_runs": 268,
+     "fpr": 0.296875,
+     "recall": 0.7238805970149254,
+     "precision": 0.9107981220657277,
+     "fired": 0.641566265060241,
+     "steps_saved_fraction": 0.3752647573441385,
+     "resolve_rate_no_abort": 0.1927710843373494,
+     "resolve_rate_with_abort": 0.1355421686746988
+    }
+   }
+  },
+  "fpr_25": {
+   "threshold": 0.28,
+   "test": {
+    "runs": 11196,
+    "success_runs": 3936,
+    "fail_runs": 7260,
+    "fpr": 0.2035060975609756,
+    "recall": 0.5805785123966942,
+    "precision": 0.840311004784689,
+    "fired": 0.4480171489817792,
+    "steps_saved_fraction": 0.17959715351977584,
+    "resolve_rate_no_abort": 0.3515541264737406,
+    "resolve_rate_with_abort": 0.280010718113612
+   },
+   "by_policy": {
+    "Qwen3-Coder-480B-A35B-Instruct": {
+     "runs": 5292,
+     "success_runs": 2797,
+     "fail_runs": 2495,
+     "fpr": 0.0861637468716482,
+     "recall": 0.2581162324649299,
+     "precision": 0.727683615819209,
+     "fired": 0.16723356009070295,
+     "steps_saved_fraction": 0.08906267196939725,
+     "resolve_rate_no_abort": 0.5285336356764928,
+     "resolve_rate_with_abort": 0.48299319727891155
+    },
+    "swe-agent-llama-405b": {
+     "runs": 58,
+     "success_runs": 25,
+     "fail_runs": 33,
+     "fpr": 0.52,
+     "recall": 0.9090909090909091,
+     "precision": 0.6976744186046512,
+     "fired": 0.7413793103448276,
+     "steps_saved_fraction": 0.42691131498470947,
+     "resolve_rate_no_abort": 0.43103448275862066,
+     "resolve_rate_with_abort": 0.20689655172413793
+    },
+    "swe-agent-llama-70b": {
+     "runs": 5514,
+     "success_runs": 1050,
+     "fail_runs": 4464,
+     "fpr": 0.49714285714285716,
+     "recall": 0.7421594982078853,
+     "precision": 0.8638852672750977,
+     "fired": 0.6955023576351106,
+     "steps_saved_fraction": 0.39196919948148323,
+     "resolve_rate_no_abort": 0.19042437431991294,
+     "resolve_rate_with_abort": 0.0957562568008705
+    },
+    "swe-agent-llama-8b": {
+     "runs": 332,
+     "success_runs": 64,
+     "fail_runs": 268,
+     "fpr": 0.390625,
+     "recall": 0.8507462686567164,
+     "precision": 0.9011857707509882,
+     "fired": 0.7620481927710844,
+     "steps_saved_fraction": 0.4256377198637075,
+     "resolve_rate_no_abort": 0.1927710843373494,
+     "resolve_rate_with_abort": 0.11746987951807229
+    }
+   }
+  }
+ },
+ "per_policy_thresholds": {
+  "Qwen3-Coder-480B-A35B-Instruct": {
+   "dev_runs": 986,
+   "test_runs": 5292,
+   "fpr_5": {
+    "threshold": 0.22,
+    "test": {
+     "runs": 5292,
+     "success_runs": 2797,
+     "fail_runs": 2495,
+     "fpr": 0.03539506614229532,
+     "recall": 0.12785571142284569,
+     "precision": 0.7631578947368421,
+     "fired": 0.07898715041572184,
+     "steps_saved_fraction": 0.03769122996974826,
+     "resolve_rate_no_abort": 0.5285336356764928,
+     "resolve_rate_with_abort": 0.5098261526832956
+    }
+   },
+   "fpr_10": {
+    "threshold": 0.25,
+    "test": {
+     "runs": 5292,
+     "success_runs": 2797,
+     "fail_runs": 2495,
+     "fpr": 0.058991776903825524,
+     "recall": 0.1971943887775551,
+     "precision": 0.7488584474885844,
+     "fired": 0.12414965986394558,
+     "steps_saved_fraction": 0.06293968391838872,
+     "resolve_rate_no_abort": 0.5285336356764928,
+     "resolve_rate_with_abort": 0.4973544973544973
+    }
+   },
+   "fpr_25": {
+    "threshold": 0.32,
+    "test": {
+     "runs": 5292,
+     "success_runs": 2797,
+     "fail_runs": 2495,
+     "fpr": 0.12584912406149446,
+     "recall": 0.3286573146292585,
+     "precision": 0.6996587030716723,
+     "fired": 0.2214663643235072,
+     "steps_saved_fraction": 0.117833059173833,
+     "resolve_rate_no_abort": 0.5285336356764928,
+     "resolve_rate_with_abort": 0.46201814058956914
+    }
+   }
+  },
+  "swe-agent-llama-70b": {
+   "dev_runs": 943,
+   "test_runs": 5514,
+   "fpr_5": {
+    "threshold": 0.06,
+    "test": {
+     "runs": 5514,
+     "success_runs": 1050,
+     "fail_runs": 4464,
+     "fpr": 0.02095238095238095,
+     "recall": 0.17831541218637992,
+     "precision": 0.9731051344743277,
+     "fired": 0.14834965542256076,
+     "steps_saved_fraction": 0.11982550512695123,
+     "resolve_rate_no_abort": 0.19042437431991294,
+     "resolve_rate_with_abort": 0.18643453028654333
+    }
+   },
+   "fpr_10": {
+    "threshold": 0.09000000000000001,
+    "test": {
+     "runs": 5514,
+     "success_runs": 1050,
+     "fail_runs": 4464,
+     "fpr": 0.06571428571428571,
+     "recall": 0.3055555555555556,
+     "precision": 0.9518492672714585,
+     "fired": 0.25988393180993835,
+     "steps_saved_fraction": 0.18741121952355447,
+     "resolve_rate_no_abort": 0.19042437431991294,
+     "resolve_rate_with_abort": 0.1779107725788901
+    }
+   },
+   "fpr_25": {
+    "threshold": 0.15,
+    "test": {
+     "runs": 5514,
+     "success_runs": 1050,
+     "fail_runs": 4464,
+     "fpr": 0.21428571428571427,
+     "recall": 0.5123207885304659,
+     "precision": 0.9104299363057324,
+     "fired": 0.4555676459920203,
+     "steps_saved_fraction": 0.2848659851430967,
+     "resolve_rate_no_abort": 0.19042437431991294,
+     "resolve_rate_with_abort": 0.14961915125136016
+    }
+   }
+  }
+ }
+}
