@@ -1,0 +1,10 @@
+{
+  "wall_seconds": 7637.061877012253,
+  "records_seen": 27000,
+  "optimizer_steps": 2955,
+  "records": 27000,
+  "dropped": 0,
+  "peak_device_bytes": 76803984384,
+  "batch": 1,
+  "accum": 8
+}
