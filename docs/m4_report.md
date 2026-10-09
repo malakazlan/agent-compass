@@ -34,8 +34,21 @@ Per-question temperatures fitted on 5,000 dev records (`runs/m4-v1-2b/calibratio
 Dev (5,000 records incl. tau2): p_success AUROC 0.675 pooled; tau2 0.774, SWE-agent 0.703, OpenHands 0.561
 (the OpenHands dev subsample has been noisy for v0 as well: 0.651 dev versus 0.722 test).
 
-Second domain, tau2-bench tool-use agents (test_tau2, 3,832 records, 840 runs, held-out tasks): see the
-line added below once the pod evaluation finished.
+**Second domain, tau2-bench tool-use agents** (test_tau2: 3,832 records, 840 runs of 30 policy models on
+held-out tasks; only 3,000 tau2 records were in training). Raw, no calibration:
+
+| question | tau2 test |
+|---|---|
+| p_success AUROC [95% CI] | **0.780** [0.726, 0.832], by prefix 0.770 / 0.779 / 0.762 / 0.798; ECE 0.017; abort recall 36.6% at 5% FPR |
+| stuck AUROC | 0.993 (positive rate 2.2%) |
+| escalate AUROC | 0.902 |
+| best_next top-1 (K about 4) | 0.633 (chance 0.25) |
+| steps_left accuracy / within-one | 0.773 / 0.994 |
+
+The model transfers to a second domain with a small slice of in-domain training data: p_success on
+tool-use runs is as good as on coding runs, and best_next is markedly easier there (30 policies
+attempt each task, so candidate sets contrast many agents at the same turn). Progress is not scored
+on tau2 (its rule is coding-specific and was masked).
 
 ## Reading
 

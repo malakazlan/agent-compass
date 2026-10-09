@@ -47,9 +47,14 @@ def logits_of(rows: list[dict]) -> np.ndarray:
     lg = rows[0].get("logits")
     if lg:
         if isinstance(lg, dict):
-            return np.array([[r["logits"][k] for k in r["keys"]] for r in rows], dtype=float)
-        return np.array([r["logits"] for r in rows], dtype=float)  # kev: list aligned with keys
-    return np.log(np.clip(np.array([r["p"] for r in rows], dtype=float), 1e-9, 1.0))
+            vals = [[r["logits"][k] for k in r["keys"]] for r in rows]
+        else:
+            vals = [list(r["logits"]) for r in rows]  # kev: list aligned with keys
+    else:
+        vals = [list(np.log(np.clip(np.array(r["p"], dtype=float), 1e-9, 1.0))) for r in rows]
+    # choice questions have a variable number of options: pad with a very negative logit
+    k = max(len(v) for v in vals)
+    return np.array([v + [-1e9] * (k - len(v)) for v in vals], dtype=float)
 
 
 def softmax(z: np.ndarray, T: float) -> np.ndarray:
