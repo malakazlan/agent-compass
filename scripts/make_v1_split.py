@@ -48,29 +48,50 @@ def strict_ok(r: dict) -> bool:
 
 
 def pick_trajectories(path: Path, n_records: int, prefixes_per_traj: int, rng: random.Random) -> list[dict]:
-    by_traj: dict[str, list[dict]] = defaultdict(list)
-    for r in stream(path):
-        if strict_ok(r):
-            by_traj[r["_meta"]["traj_id"]].append(r)
-    # Trajectories from (task, policy) groups with BOTH outcomes first, so the ranking loss gets pairs:
-    # a group with only successes or only failures cannot form a success/failure pair.
-    outcomes: dict[tuple[str, str], set[bool]] = defaultdict(set)
-    for tid, recs in by_traj.items():
-        m = recs[0]["_meta"]
-        outcomes[(m["task_id"], m["policy_model"])].add(bool(m["outcome"]))
-    mixed = [tid for tid, recs in by_traj.items() if len(outcomes[(recs[0]["_meta"]["task_id"], recs[0]["_meta"]["policy_model"])]) == 2]
-    rest = [tid for tid in by_traj if tid not in set(mixed)]
-    rng.shuffle(mixed)
-    rng.shuffle(rest)
-    ids = mixed + rest
-    out: list[dict] = []
-    for tid in ids:
-        if len(out) >= n_records:
+    """Memory-light: pass 1 keeps only (offset, prefix_len, meta) per record; pass 2 loads the chosen ones."""
+    index: dict[str, list[tuple[int, int]]] = defaultdict(list)  # traj -> [(offset, prefix_len)]
+    head_meta: dict[str, dict] = {}
+    with path.open("rb") as f:
+        pos = f.tell()
+        for line in f:
+            if line.strip():
+                r = json.loads(line)
+                if strict_ok(r):
+                    m = r["_meta"]
+                    index[m["traj_id"]].append((pos, m["prefix_len"]))
+                    head_meta.setdefault(m["traj_id"], {"task_id": m["task_id"], "policy_model": m["policy_model"], "outcome": bool(m["outcome"])})
+            pos = f.tell()
+    by_traj: dict[str, list[dict]] = {}
+
+    def load_records(offsets: list[int]) -> list[dict]:
+        out = []
+        with path.open("rb") as f:
+            for off in offsets:
+                f.seek(off)
+                out.append(json.loads(f.readline()))
+        return out
+
+    # select trajectories first, then load only their records
+    outcomes_by_group: dict[tuple[str, str], set[bool]] = defaultdict(set)
+    for tid, hm in head_meta.items():
+        outcomes_by_group[(hm["task_id"], hm["policy_model"])].add(hm["outcome"])
+    mixed_ids = [tid for tid, hm in head_meta.items() if len(outcomes_by_group[(hm["task_id"], hm["policy_model"])]) == 2]
+    rest_ids = [tid for tid in head_meta if tid not in set(mixed_ids)]
+    rng.shuffle(mixed_ids)
+    rng.shuffle(rest_ids)
+    chosen: list[tuple[str, list[int]]] = []
+    total = 0
+    for tid in mixed_ids + rest_ids:
+        if total >= n_records:
             break
-        recs = sorted(by_traj[tid], key=lambda r: r["_meta"]["prefix_len"])
-        if prefixes_per_traj and len(recs) > prefixes_per_traj:
-            recs = rng.sample(recs, prefixes_per_traj)
-        out.extend(recs)
+        entries = sorted(index[tid], key=lambda e: e[1])
+        if prefixes_per_traj and len(entries) > prefixes_per_traj:
+            entries = rng.sample(entries, prefixes_per_traj)
+        chosen.append((tid, [off for off, _ in entries]))
+        total += len(entries)
+    out: list[dict] = []
+    for tid, offs in chosen:
+        out.extend(load_records(offs))
     return out
 
 
@@ -107,6 +128,41 @@ def make_pairs(recs: list[dict], window: float, rng: random.Random) -> tuple[lis
     ordered = [r for u in units for r in u]
     return ordered, {"pairs": n_pairs, "paired_records": 2 * n_pairs, "single_records": len(singles),
                      "groups_with_both_outcomes": sum(1 for rs in groups.values() if any(r["_meta"]["outcome"] for r in rs) and not all(r["_meta"]["outcome"] for r in rs))}
+
+
+def write_streamed(src_paths: list[Path], out_path: Path, rng: random.Random, transform=None) -> dict:
+    """Shuffle by byte offset and write one record at a time: the full test set never sits in memory."""
+    offsets: list[tuple[Path, int]] = []
+    for sp in src_paths:
+        with sp.open("rb") as f:
+            pos = f.tell()
+            for line in f:
+                if line.strip() and strict_ok(json.loads(line)):
+                    offsets.append((sp, pos))
+                pos = f.tell()
+    rng.shuffle(offsets)
+    q_counts: Counter[str] = Counter()
+    pos_n = 0
+    tokens = 0
+    trajs: set[str] = set()
+    handles = {sp: sp.open("rb") for sp in src_paths}
+    with out_path.open("w", encoding="utf-8", newline="
+") as out:
+        for sp, off in offsets:
+            handles[sp].seek(off)
+            r = json.loads(handles[sp].readline())
+            if transform:
+                r = transform(r)
+            out.write(json.dumps(r, ensure_ascii=False) + "
+")
+            q_counts.update(r["questions"].keys())
+            pos_n += int(bool(r["questions"]["p_success"]["label"]))
+            tokens += r["_meta"]["state_tokens"]
+            trajs.add(r["_meta"]["traj_id"])
+    for h in handles.values():
+        h.close()
+    return {"records": len(offsets), "positive_rate": round(pos_n / max(1, len(offsets)), 4), "questions": dict(q_counts),
+            "state_tokens_total": tokens, "trajectories": len(trajs)}
 
 
 def write(recs: list[dict], path: Path) -> dict:
@@ -163,16 +219,13 @@ def main() -> None:
     stats["files"]["dev"] = write(dev, OUT / "dev.jsonl")
     print("dev", stats["files"]["dev"], flush=True)
 
-    test: list[dict] = []
-    for ds in DATASETS:
-        test.extend(r for r in stream(EX / f"{ds}.test.jsonl") if strict_ok(r))
-    random.Random(args.seed + 1).shuffle(test)
-    stats["files"]["test"] = write(test, OUT / "test.jsonl")
+    stats["files"]["test"] = write_streamed([EX / f"{ds}.test.jsonl" for ds in DATASETS], OUT / "test.jsonl", random.Random(args.seed + 1))
     print("test", stats["files"]["test"], flush=True)
     for tag, _, _ in extras:
-        extra_test = drop_progress([r for r in stream(EX / f"{tag}.test.jsonl") if strict_ok(r)])
-        random.Random(args.seed + 2).shuffle(extra_test)
-        stats["files"][f"test_{tag}"] = write(extra_test, OUT / f"test_{tag}.jsonl")
+        def _drop(r: dict) -> dict:
+            r["questions"].pop("progress", None)
+            return r
+        stats["files"][f"test_{tag}"] = write_streamed([EX / f"{tag}.test.jsonl"], OUT / f"test_{tag}.jsonl", random.Random(args.seed + 2), transform=_drop)
         print(f"test_{tag}", stats["files"][f"test_{tag}"], flush=True)
     (OUT / "stats.json").write_text(json.dumps(stats, indent=1) + "\n", encoding="utf-8", newline="\n")
 
