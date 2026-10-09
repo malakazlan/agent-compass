@@ -70,16 +70,38 @@ v0 remains the recommended head for `p_success` and abort decisions; v1 for `stu
 
 ## Using the model
 
-The released adapters are in the checkpoint layout of the [kev](https://github.com/jaredpalmer/kev) runtime, which provides batched serving, CUDA graphs and the System One endpoint. Until the `agent-compass` SDK and server wrapper land (next milestone), scoring runs through that runtime:
+**Server** (GPU box). Loads one or both adapters with the [kev](https://github.com/jaredpalmer/kev) runtime (batched model thread, prefix cache, CUDA graphs), routes each question to the adapter that answers it best, applies the release calibration, and serves the System One contract plus a trajectory endpoint with guardian decisions:
 
 ```bash
-# in a kev checkout with its environment (fused Qwen3.5 kernels required, see docs/pod_runbook.md)
+pip install "git+https://github.com/jaredpalmer/kev" fastapi uvicorn
 huggingface-cli download azlanmalikai/agent-compass-2b --local-dir runs/agent-compass-2b
-UV_NO_SYNC=1 KEV_DTYPE=bf16 uv run python <agent-compass>/scripts/pod/kev_benchmark_long.py \
-    --run runs/agent-compass-2b --data states.jsonl --out out/ --max_state 4352
+python -m agent_compass.server.app --v0 runs/agent-compass-2b --v1 runs/agent-compass-2b/v1 --port 8008
 ```
 
-`states.jsonl` holds one record per state in the format of the dataset (`state` text plus a `questions` map); `agent_compass.data.state.build_state` renders a state from a trajectory in the unified schema (`agent_compass/data/schema.py`). The default server rejects states longer than its training context, so the context override shown above is required for 4k-token states.
+`POST /v1/systemone` takes `{"state", "questions": {id: {type, instructions, criteria}}}` and returns calibrated answers; `POST /v1/score` takes a trajectory in the unified schema (or a rendered state), the question ids, optional candidate actions and a guardian budget, and returns answers plus `continue` / `abort` / `escalate`.
+
+**SDK** (any machine, no model dependency):
+
+```python
+from agent_compass.sdk import Compass, RemoteBackend, TrajectoryTracker, Guardian
+
+compass = Compass(RemoteBackend("http://gpu-box:8008"))
+tracker = TrajectoryTracker(task="Fix the failing test in utils.py", policy_model="gpt-4o-mini")
+guardian = Guardian(budget="fpr_5")           # abort at a 5% false-abort budget
+
+for action, observation in my_agent_loop():   # your agent's executed steps
+    tracker.add(action, observation)
+    answers = compass.score(tracker.trajectory(), ("p_success", "stuck", "escalate"))
+    decision = guardian.decide(answers, step=len(tracker))
+    if decision.action != "continue":
+        break
+
+best, answers = compass.pick(tracker.trajectory(), candidates=["pytest -x", "cat utils.py", "git diff"])
+```
+
+The state is rendered exactly as in training (task, policy tag, compressed history, last eight steps, thoughts removed). `RemoteBackend` talks to this server or to a plain `kev.serve` instance; `LocalBackend` scores in-process on a GPU. Integrations: `agent_compass.sdk.integrations.mini_swe_agent.CompassAgent` (a `DefaultAgent` subclass with guardian exits and best-of-N action selection, written against mini-swe-agent 2.4.6) and `agent_compass.sdk.integrations.generic.CompassMonitor` for any loop or event stream, including OpenHands and LangGraph callbacks. Examples in `examples/`.
+
+Calibration constants (temperatures per adapter and question, abort thresholds per false-abort budget and policy) are the measured values from the reports and live in `agent_compass/sdk/calibration.py`.
 
 ## Repository layout
 
