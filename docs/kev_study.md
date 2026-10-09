@@ -5,7 +5,7 @@ Source: `D:\kev`, a **shallow clone (50 commits, `.git/shallow` present)** at HE
 Nothing in `D:\kev` was modified. Static reading only (local Python is 3.10; kev requires `>=3.12,<3.14`,
 `pyproject.toml:328`), plus small verification commands noted inline.
 
-> **Headline correction to `CLAUDE.md` §3.** The note "tested on Apple MPS; CUDA untested — port carefully" describes
+> **Headline correction to the project brief §3.** The note "tested on Apple MPS; CUDA untested — port carefully" describes
 > the September-17 prototype (`kev-0.5b`, `docs/model-cards/kev-0.5b.md:58,116`). The repo as cloned is a much larger
 > system: every released checkpoint (Kev-0.8B/4B/9B/27B) was trained on H100/H200 through Modal with bf16 autocast
 > (`runs/q35-4b-s23/00-trial-0/provenance.json` → `"gpu": "NVIDIA H100 80GB HBM3", "torch": "2.8.0+cu128"`),
@@ -477,7 +477,7 @@ Ablation flags that already exist and should be kept as one-liners: `--lora_targ
 1. **Backbone choice decides the whole compute path.** Hybrid Qwen3.5 (kev's family): rows form, state × Q recompute
    unless `--shared_prefix`, needs fla 0.5.2 + triton ≥ 3.7.1 + causal-conv1d on Hopper, exact-eval parity caveats
    (TF32-like rounding in fla, `kev/shared_prefix.py:172-173`). Attention-only Qwen3: packed block-causal mask with
-   SDPA, simpler, but O(L²) mask memory at 8-16k and an older base. `CLAUDE.md` §5.1 says "latest small Qwen base"; the
+   SDPA, simpler, but O(L²) mask memory at 8-16k and an older base. the project brief §5.1 says "latest small Qwen base"; the
    latest (Qwen3.5) is hybrid. Decide early; kev's 4B/9B results say Qwen3.5 > Qwen3 by +7 pp locked transfer
    (`docs/model-cards/kev-9b.md:90`).
 2. **Long context is untested in kev beyond 7.5k state tokens** and only the 27B "holds up" on buried states
@@ -485,7 +485,7 @@ Ablation flags that already exist and should be kept as one-liners: `--lora_targ
    (`modal_app.py::smoke_base` pattern, `:249-279`).
 3. **Per-branch budget of 640 tokens** (`kev/model.py:20-30`) is too small for `best_next` with several long candidate
    actions; changing it changes what `training_context`/suite admission mean.
-4. **M0 as written in `CLAUDE.md` ("kev-0.5b reproduces its README numbers") is not reproducible as stated**: the README
+4. **M0 as written in the project brief ("kev-0.5b reproduces its README numbers") is not reproducible as stated**: the README
    no longer carries kev-0.5b numbers; the card's numbers (0.799 acc / ECE 0.065, `kev-0.5b.md:146`) come from the
    legacy `kev.evaluate` path on freshly built HF splits (`kev/evaluate.py:186-207`), the card's reproduce command
    (`:124`) omits `--base Qwen/Qwen2.5-0.5B` while `kev.train` now defaults to Qwen3-0.6B-Base (`kev/train.py:301`),

@@ -152,7 +152,7 @@ On abort at step t_f, replay edits, "locate the first edit at or after t_f and e
 ### kev (jaredpalmer/kev)
 - https://github.com/jaredpalmer/kev -- open System One-compatible models: Qwen3.5/3.8 base + rank-16 LoRA (attention, MLP, DeltaNet projections), block mask ("a token [reads] the state and its own question, but not other questions or future tokens"), pointer head scoring options vs decide token, per-checkpoint fitted temperature. Apache-2.0.
 - Published accuracies (new sources dev/test; trained sources dev/test): Kev-0.8B 0.648/0.697; 0.827/0.838 -- Kev-4B 0.817/0.838; 0.873/0.865 -- Kev-9B 0.822/0.852; 0.872/0.874 -- Kev-27B 0.848/0.896; 0.866/0.870. Jev 0.857 on new sources; Kev-9B MMLU 0.74 vs Jev 0.90. Brier 0.236-0.481. Kev-4B: six questions in 18.1 ms on H100.
-- Note: README lists tested hardware including L4/L40S/H100/H200/B200 and Apple M5 (MLX), so the CLAUDE.md note "CUDA untested" appears outdated; still port carefully.
+- Note: README lists tested hardware including L4/L40S/H100/H200/B200 and Apple M5 (MLX), so the project brief note "CUDA untested" appears outdated; still port carefully.
 
 ### Laya (convaiinnovations/laya)
 - https://huggingface.co/convaiinnovations/laya -- non-autoregressive decision model: ModernBERT-large backbone + 2-layer decision head, 421M params (multilingual mmBERT-base variant 322M); noul/choice/score primitives; RLCD-style proper-scoring-rule training; typed-decisions fine-tuned 0.766; ECE 0.081 after temperature scaling; ~33 ms/question on T4; Apache-2.0.

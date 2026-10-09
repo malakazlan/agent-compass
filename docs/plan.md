@@ -1,10 +1,11 @@
 # agent-compass: plan
 
-**Status 2026-09-28.** Tasks 1, 4, 5, 6, 7, 8 (local part) and 9 of section 6 are done; M1 is
-complete and M2 is complete except the judge-model validation of stuck/progress samples. See
-`docs/data_m1.md` (measured data), `docs/label_qa_findings.md` (label QA, escalate redundancy),
-`docs/baselines_v0.md` (the bar to beat: AUROC 0.667 SWE-agent / 0.619 OpenHands on held-out
-repos). No GPU used yet. Next: task 2 and 3 (pod setup, M0 kev reproduction) then task 10 (M3 run).
+**Status 2026-10-10.** M0 to M4 done, plus the offline part of M5 and a second-domain evaluation
+(M6 lite). Reports: `docs/m0_report.md`, `docs/m3_report.md` (v0, p_success), `docs/m4_report.md`
+(v1, six heads, tau2-bench). Label QA with a judge model: `docs/label_qa_findings.md`. GPU used:
+about 9 h 50 min of one H100 across two sessions. Remaining: release tooling (SDK, server, hooks),
+retrain on the refined stuck labels, ablations at small scale, 4B tier, live agent evaluation; see
+the README roadmap. The plan below is kept as written on 2026-09-25 for the record.
 
 Written 2026-09-25 after the study phase. Sources: `docs/kev_study.md`, `docs/related_work.md`,
 `docs/data_audit.md`, `docs/data_audit_secondary.md`. Every number below is quoted from those docs
@@ -29,7 +30,7 @@ released no code, weights or data.
 
 ## 2. What the study changed in the brief
 
-| CLAUDE.md said | Study found | Change |
+| Project brief said | Study found | Change |
 |---|---|---|
 | kev is MPS-tested, CUDA untested | Every released kev checkpoint was trained on H100/H200 via Modal in bf16; CUDA graphs, fused Qwen3.5 kernels and CUDA-only tests exist | M0 shrinks to "pipeline runs on RunPod and reproduces one small kev run" |
 | M0 gate: kev-0.5b reproduces its README numbers | README has no 0.5b numbers; the card's command omits `--base`; augmentation is re-seeded per epoch | M0 gate becomes the `q35-08b` run (Qwen3.5-0.8B, decision-v7, about 20 min on one H100, transfer 0.643 at seed 2) within seed noise of plus or minus 1 pp |
