@@ -146,15 +146,13 @@ def write_streamed(src_paths: list[Path], out_path: Path, rng: random.Random, tr
     tokens = 0
     trajs: set[str] = set()
     handles = {sp: sp.open("rb") for sp in src_paths}
-    with out_path.open("w", encoding="utf-8", newline="
-") as out:
+    with out_path.open("w", encoding="utf-8", newline="\n") as out:
         for sp, off in offsets:
             handles[sp].seek(off)
             r = json.loads(handles[sp].readline())
             if transform:
                 r = transform(r)
-            out.write(json.dumps(r, ensure_ascii=False) + "
-")
+            out.write(json.dumps(r, ensure_ascii=False) + "\n")
             q_counts.update(r["questions"].keys())
             pos_n += int(bool(r["questions"]["p_success"]["label"]))
             tokens += r["_meta"]["state_tokens"]
